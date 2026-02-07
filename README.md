@@ -1,8 +1,8 @@
 # team-diamonds
 
-Team Members:
-&emsp; Shubham Tanwar
-&emsp; Tanya Thomas
-&esmp; Subhradeep Acharjee
-&esmp; Conor Zhang
-&esmp; Ethan Bell
+### Team Members:
+* Shubham Tanwar  
+* Tanya Thomas  
+* Subhradeep Acharjee  
+* Conor Zhang  
+* Ethan Bell  
