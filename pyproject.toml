@@ -8,3 +8,8 @@ dependencies = [
     "mypy>=1.19.1",
     "ruff>=0.15.1",
 ]
+
+[tool.uv.workspace]
+members = [
+    "components/component-n",
+]
