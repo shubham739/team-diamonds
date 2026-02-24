@@ -26,9 +26,9 @@ from typing import Any
 import requests
 from requests.auth import HTTPBasicAuth
 
-from implementation.jira_issue import JiraIssue, get_issue as _make_issue
-from interface.client import IssueTrackerClient, IssueNotFoundError as BaseIssueNotFoundError
-from interface.issue import Status, IssueUpdate
+from src.jira_client_impl.src.jira_client_impl.jira_issue import JiraIssue, get_issue as _make_issue
+from src.work_mgmt_client_interface.src.work_mgmt_client_interface.client import IssueTrackerClient, IssueNotFoundError as BaseIssueNotFoundError
+from src.work_mgmt_client_interface.src.work_mgmt_client_interface.issue import Status, IssueUpdate
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -178,6 +178,7 @@ class JiraClient(IssueTrackerClient):
         """
         Iteration stops once "max_results" number of issues have been yielded or no more results exist.
         """
+        print("In get_issues...")
         clauses: list[str] = []
         if title:
             clean_title = sanitize_input(title)
@@ -197,19 +198,21 @@ class JiraClient(IssueTrackerClient):
             clauses.append(f"assignee = '{clean_assignee}'")
 
         #build JQL query
-        jql = " AND ".join(clauses) if clauses else "ORDER BY updated DESC"
-        if clauses:
-            jql += " ORDER BY updated DESC"
+        #Jira requires a bounding clause for queries. Adding this dummy bound bypasses that requirement
+        if not clauses:
+            clauses.append("project IS NOT EMPTY")
+        jql = " AND ".join(clauses) + " ORDER BY updated DESC"
 
         start_at = 0
         page_size = min(max_results, 100) #Jira's maximum is 100
         yielded = 0
 
+        print("Before while loop")
         #Each iteration makes one API request, fetching the next page
         #stop requesting pages when we have passed the total number of issues Jira reported
         while yielded < max_results:
             data = self._get(
-                "/search",
+                "/search/jql",
                 params={"jql": jql, "startAt": start_at, "maxResults": page_size, "fields": "*all"},
             )
             issues: list[dict] = data.get("issues", [])

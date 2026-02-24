@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 
-from work_mgmt_client_interface.issue import Status, Issue, IssueUpdate
+from src.work_mgmt_client_interface.src.work_mgmt_client_interface.issue import Status, Issue, IssueUpdate
 
 __all__ = ["Client", "get_client"]
 
@@ -111,6 +111,10 @@ class IssueTrackerClient(ABC):
             IssueNotFoundError: If no issue with that ID exists.
         """
         raise NotImplementedError
+
+class IssueNotFoundError(Exception):
+    """Base exception raised when an issue cannot be found by the client."""
+    pass
 
 def get_client(*, interactive: bool = False) -> IssueTrackerClient:
     """
