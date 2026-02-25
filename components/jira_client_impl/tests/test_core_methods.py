@@ -4,7 +4,7 @@ This module contains comprehensive unit tests for the core business logic
 of the JiraClient class, mocking all external dependencies.
 """
 
-#For now, we can run the tests in this file with this shell command "python -m pytest src/jira_client_impl/tests/test_core_methods.py -v"
+#For now, we can run the tests in this file with this shell command "python -m pytest components/jira_client_impl/tests/test_core_methods.py -v"
 
 import pytest
 from unittest.mock import MagicMock

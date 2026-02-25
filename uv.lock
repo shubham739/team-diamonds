@@ -256,7 +256,7 @@ wheels = [
 [[package]]
 name = "jira-client-impl"
 version = "0.1.0"
-source = { editable = "src/jira_client_impl" }
+source = { editable = "components/jira_client_impl" }
 dependencies = [
     { name = "python-dotenv" },
     { name = "requests" },
@@ -275,7 +275,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "requests" },
-    { name = "work-mgmt-client-interface", editable = "src/work_mgmt_client_interface" },
+    { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["test"]
 
@@ -837,7 +837,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "jira-client-impl", editable = "src/jira_client_impl" },
+    { name = "jira-client-impl", editable = "components/jira_client_impl" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.6.1" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.6.15" },
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=1.16.12" },
@@ -847,7 +847,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.7" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.4.20250611" },
-    { name = "work-mgmt-client-interface", editable = "src/work_mgmt_client_interface" },
+    { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["dev"]
 
@@ -908,4 +908,4 @@ wheels = [
 [[package]]
 name = "work-mgmt-client-interface"
 version = "0.1.0"
-source = { editable = "src/work_mgmt_client_interface" }
+source = { editable = "components/work_mgmt_client_interface" }

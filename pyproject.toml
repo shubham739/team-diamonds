@@ -24,8 +24,8 @@ dev = [
 
 [tool.uv.workspace]
 members = [
-    "src/work_mgmt_client_interface",
-    "src/jira_client_impl",
+    "components/work_mgmt_client_interface",
+    "components/jira_client_impl",
 ]
 
 [tool.ruff]
@@ -44,7 +44,7 @@ per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "
 [tool.mypy]
 strict = true
 explicit_package_bases = true # Required for src layout
-mypy_path = ["src/work_mgmt_client_interface/src", "src/jira_client_impl/src"]
+mypy_path = ["components/work_mgmt_client_interface/src", "components/jira_client_impl/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
 
@@ -52,9 +52,9 @@ warn_unused_ignores = false
 [tool.pytest.ini_options]
 pythonpath = [
     ".", 
-    "src"
+    "components"
 ]
-testpaths = ["tests", "src/*/tests"]
+testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
@@ -65,7 +65,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["components"]
 omit = ["*/tests/*", "*/__main__.py"]
 
 [tool.coverage.report]
