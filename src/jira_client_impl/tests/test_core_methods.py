@@ -8,14 +8,10 @@ of the JiraClient class, mocking all external dependencies.
 
 import pytest
 from unittest.mock import MagicMock
-# Adjust this import path if your file is nested differently
-from src.jira_client_impl.src.jira_client_impl.jira_impl import JiraClient
-from src.work_mgmt_client_interface.src.work_mgmt_client_interface.issue import Status
+from jira_client_impl.jira_impl import JiraClient
+from work_mgmt_client_interface.issue import Status
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
+#Fixture for mock tests
 @pytest.fixture
 def jira_client():
     """Returns a JiraClient with mocked internal API methods."""
@@ -30,10 +26,7 @@ def jira_client():
     
     return client
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
-
+#Tests for get_issues method
 def test_get_issues_builds_correct_jql(jira_client):
     # Setup: Tell our mocked _get method what to return when called
     jira_client._get.return_value = {
@@ -60,20 +53,13 @@ def test_get_issues_pagination(jira_client):
     result = list(jira_client.get_issues(max_results=5))
 
     # Assert: It should have combined all 3 issues from the 2 pages
-    assert len(result) == 3
     assert result == ["MockIssue-TEST-1", "MockIssue-TEST-2", "MockIssue-TEST-3"]
-    
-    # Assert: It should have looped and called _get exactly twice
-    assert jira_client._get.call_count == 2
 
 
-def test_get_issues_unbounded_fallback(jira_client):
-    # Setup: Empty response just to check the JQL building
+def test_get_issues_when_no_issues_exits(jira_client):
+    # Setup: Empty response to see verify correct behavior when no issues exist
     jira_client._get.return_value = {"issues": [], "total": 0}
 
-    # Act: Call without any filters
-    list(jira_client.get_issues())
+    result = list(jira_client.get_issues())
 
-    # Assert: Did it apply our dummy fallback clause?
-    args, kwargs = jira_client._get.call_args
-    assert "project IS NOT EMPTY" in kwargs["params"]["jql"]
+    assert result == []

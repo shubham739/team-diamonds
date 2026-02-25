@@ -1,5 +1,4 @@
-# from src.work_mgmt_client_interface.src.work_mgmt_client_interface.client import get_client
-from src.jira_client_impl.src.jira_client_impl.jira_impl import get_client
+from jira_client_impl import get_client
 
 def main():
     print("Hello from team-diamonds!")
@@ -10,8 +9,14 @@ def main():
     try:
         issues = client.get_issues(max_results=5)
         for issue in issues:
-            print(f"- {issue}") # Assuming your JiraIssue class has a __str__ or __repr__
+            print(f"- {issue}")
     except Exception as e:
+        print(f"Error connecting to Jira: {e}")
+    
+    try:
+        issue = client.get_issue("OPS-20")
+        print(f"- {issue}")
+    except:
         print(f"Error connecting to Jira: {e}")
 
 if __name__ == "__main__":

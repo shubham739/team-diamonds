@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 
-from src.work_mgmt_client_interface.src.work_mgmt_client_interface.issue import Status, Issue, IssueUpdate
+from work_mgmt_client_interface.issue import Status, Issue, IssueUpdate
 
 __all__ = ["Client", "get_client"]
 

@@ -1,4 +1,4 @@
-from src.work_mgmt_client_interface.src.work_mgmt_client_interface.issue import Status, Issue
+from work_mgmt_client_interface.issue import Status, Issue
 
 # ---------------------------------------------------------------------------
 # Mapping tables: Jira-native values  →  normalized enum values
