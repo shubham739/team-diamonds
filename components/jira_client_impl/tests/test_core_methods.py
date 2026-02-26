@@ -169,6 +169,6 @@ def test_text_to_adf_multiline_string_sa(jira_client):
 def test_text_to_adf_non_string_input_sa():
     # testing non-string input to see if it raises the expected error
     with pytest.raises(JiraError) as exc_info:
-        _text_to_adf(12345)  # passing an integer instead of a string
+       result = _text_to_adf(12345)  # passing an integer instead of a string
     
-    assert "Input must be a string" in str(exc_info.value)
+    assert str(exc_info.value) == "Input must be a string"

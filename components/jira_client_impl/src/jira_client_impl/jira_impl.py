@@ -362,6 +362,8 @@ def _text_to_adf(text: str) -> dict:
     Notes on usage: 
         Jira Cloud requires that certain fields, particularly description, are sent to the API in Atlassian Document Format (ADF), otherwise it will be rejected
     """
+    if not isinstance(text, str):
+        raise JiraError("Input must be a string")
     return {
         "type": "doc",
         "version": 1,
