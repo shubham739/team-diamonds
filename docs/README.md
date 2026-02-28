@@ -1,6 +1,5 @@
 
 # Team Diamonds
-## Open Source and Professional Development AI Assistant Project
 
 ### Team Members:
 * Subhradeep Acharjee  
