@@ -1,12 +1,12 @@
-from jira_client_impl.jira_issue import JiraIssue, get_issue as _make_issue
-from jira_client_impl.jira_impl import JiraClient, JiraError
-from work_mgmt_client_interface.src.work_mgmt_client_interface.issue import Status, Issue, IssueUpdate
-from work_mgmt_client_interface.src.work_mgmt_client_interface.board import Board, BoardColumn
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+from jira_client_impl.jira_issue import JiraIssue, get_issue as _make_issue
+from jira_client_impl.jira_impl import JiraClient, JiraError
+from work_mgmt_client_interface.issue import Status, Issue, IssueUpdate
+from work_mgmt_client_interface.board import Board, BoardColumn
 
 
 
@@ -57,3 +57,25 @@ class JiraBoard(Board):
         """Delegate to JiraClient (Platform API v3) to fetch a single issue."""
         return self._client.get_issue(issue_id)
     
+    def create_issue(
+        self,
+        *,
+        title: str,
+        description: str = "",
+        status: Status = Status.TODO,
+    ) -> Issue:
+        """Create a new issue on the board by delegating to JiraClient."""
+        return self._client.create_issue(
+            title=title,
+            description=description,
+            status=status
+        )
+    
+    def update_issue(self, issue_id: str, update: IssueUpdate) -> Issue:
+        """Update an issue on the board by delegating to JiraClient."""
+        return self._client.update_issue(issue_id, update)
+    
+    def delete_issue(self, issue_id: str) -> None:
+        """Delete an issue from the board (not yet implemented in JiraClient)."""
+        # TODO: Implement delete_issue in JiraClient when the API endpoint is available
+        raise NotImplementedError("delete_issue is not yet implemented")
