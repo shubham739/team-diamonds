@@ -1,7 +1,6 @@
 [project]
 name = "work-mgmt-client-interface"
 version = "0.1.0"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
