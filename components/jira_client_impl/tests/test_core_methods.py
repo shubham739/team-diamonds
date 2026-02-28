@@ -8,8 +8,9 @@ of the JiraClient class, mocking all external dependencies.
 
 import pytest
 from unittest.mock import MagicMock
-from jira_client_impl.jira_impl import JiraClient, _text_to_adf, JiraError
-from work_mgmt_client_interface.issue import Status
+from jira_client_impl.jira_impl import JiraClient, _text_to_adf, JiraError, IssueNotFoundError, get_client
+from work_mgmt_client_interface.issue import Status, IssueUpdate
+import os
 
 #Fixture for mock tests
 @pytest.fixture
@@ -67,6 +68,138 @@ def test_get_issues_when_no_issues_exits(jira_client):
 
     assert result == []
 
+#--------------------------- tests for get_client function --------------------------
+
+def test_get_client_raises_when_env_vars_missing_sa():
+    # get_client raises EnvironmentError when required env vars are not set
+    
+    # Setup: Remove all Jira environment variables
+    for var in ["JIRA_BASE_URL", "JIRA_USER_EMAIL", "JIRA_API_TOKEN"]:
+        os.environ.pop(var, None)
+    
+    # Assert: Should raise EnvironmentError listing the missing variables
+    with pytest.raises(EnvironmentError):
+        get_client(interactive=False)
+
+
+def test_get_client_succeeds_when_env_vars_present_sa():
+    #get_client returns a valid JiraClient when all required env vars are set
+
+    # Setup: Set all three required environment variables
+    os.environ["JIRA_BASE_URL"] = "https://test.atlassian.net"
+    os.environ["JIRA_USER_EMAIL"] = "test@example.com"
+    os.environ["JIRA_API_TOKEN"] = "dummy_token"
+
+    # Act: Get the client in non-interactive mode
+    client = get_client(interactive=False)
+
+    # Assert: Should return a properly instantiated JiraClient
+    assert isinstance(client, JiraClient)
+
+#--------------------------- tests for sanitize_input function --------------------------
+
+def test_sanitize_input_escapes_special_chars_sa():
+    # special Jira characters are escaped to prevent JQL injection
+    from jira_client_impl.jira_impl import sanitize_input
+    
+    # Act: Pass a string containing a special character (double quote)
+    result = sanitize_input('hello "world"')
+    
+    # Assert: The double quotes should be escaped with a backslash
+    assert '\\"' in result
+
+#--------------------------- tests for _raise_for_status method --------------------------
+
+
+def test_raise_for_status_ok_response_does_not_raise_sa():
+    #successful (2xx) response does not raise any exception
+
+    # Setup: Simulate a 200 OK response
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.ok = True
+
+    # Assert: No exception should be raised for a successful response
+    JiraClient._raise_for_status(mock_response)  
+
+
+def test_raise_for_status_404_raises_issue_not_found_sa():
+    # 404 response raises IssueNotFoundError, not a generic JiraError.
+
+    # Setup: Simulate a 404 response — url is included in the error message
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_response.url = "https://test.atlassian.net/rest/api/3/issue/BAD-1"
+    
+    # Assert: Should raise IssueNotFoundError specifically, not a generic JiraError
+    with pytest.raises(IssueNotFoundError):
+        JiraClient._raise_for_status(mock_response)
+
+
+def test_raise_for_status_500_raises_jira_error_sa():
+    #non-404 error response raises JiraError with the status code in the message
+    # Setup: Simulate a 500 server error — json() returns error detail
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.ok = False
+    mock_response.json.return_value = {"error": "server error"}
+    
+    # Assert: Any non-ok, non-404 response should raise a JiraError
+    with pytest.raises(JiraError):
+        JiraClient._raise_for_status(mock_response)
+
+#-------------------------- tests for update_issue method --------------------------
+
+def test_update_issue_title_sa(jira_client):
+    #update_issue correctly sends an updated title field to the Jira API
+    
+    # Setup: Mock _put for the update call, get_issue returns the refreshed issue
+    jira_client._put = MagicMock(return_value={})
+    jira_client.get_issue = MagicMock(return_value="MockIssue-TEST-1")
+
+    # Act: Update just the title — other fields remain None and should not be sent
+    update = IssueUpdate(title="New Title")
+    result = jira_client.update_issue("TEST-1", update)
+
+    # Assert: _put was called once with the updated fields, and updated issue is returned
+    jira_client._put.assert_called_once()
+    assert result == "MockIssue-TEST-1"
+
+
+def test_update_issue_with_status_calls_transition_sa(jira_client):
+    #update_issue triggers a status transition when status is in the update.
+
+    # Setup: Mock _put and transition method, get_issue returns the refreshed issue
+    jira_client._put = MagicMock(return_value={})
+    jira_client._apply_status_transition = MagicMock()
+    jira_client.get_issue = MagicMock(return_value="MockIssue-TEST-1")
+
+    # Act: Update with only a new status — no other fields changed
+    update = IssueUpdate(status=Status.COMPLETE)
+    jira_client.update_issue("TEST-1", update)
+
+    # Assert: Transition was called with the correct issue ID and target status
+    jira_client._apply_status_transition.assert_called_once_with("TEST-1", Status.COMPLETE)
+
+
+
+def test_update_issue_with_no_changes_skips_put_sa(jira_client):
+    # _put is NOT called when the IssueUpdate has no changed fields.
+
+    # Setup: Mock _put and get_issue
+    jira_client._put = MagicMock(return_value={})
+    jira_client.get_issue = MagicMock(return_value="MockIssue-TEST-1")
+
+    # Act: Pass an empty update with no fields set
+    update = IssueUpdate()
+    jira_client.update_issue("TEST-1", update)
+
+    # Assert: _put should never be called when there's nothing to update
+    jira_client._put.assert_not_called()
+
+#-------------------- tests for _apply_status_transition method --------------------
+
+
 def test_status_transition_finds_correct_transition_sa(jira_client):
     # Testing correct transition.
     # Mock transitions endpoint response
@@ -103,6 +236,8 @@ def test_status_transition_raises_error_when_no_matching_transition_sa(jira_clie
     
     # Check that the error message indicates no transition found
     assert "No transition" in str(exc_info.value)
+
+#-------------------- tests for _text_to_adf method --------------------
 
 def test_text_to_adf_sa():
     # testing a simple string that is successfully converted to adf forrmat
