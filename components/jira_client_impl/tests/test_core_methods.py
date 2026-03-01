@@ -7,11 +7,12 @@ of the JiraClient class, mocking all external dependencies.
 #For now, we can run the tests in this file with this shell command "python -m pytest components/jira_client_impl/tests/test_core_methods.py -v"
 
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_impl import IssueNotFoundError, JiraClient, JiraError, _text_to_adf, get_client
+from jira_client_impl.jira_issue import JiraIssue
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 
@@ -302,6 +303,119 @@ def test_text_to_adf_non_string_input_sa() -> None:
        _text_to_adf(12345)  # passing an integer instead of a string
 
     assert str(exc_info.value) == "Input must be a string"
+
+def test_status_happy_path()-> None:
+    """Test Issue.status property for a successful mapping."""
+    raw_data = {"status": {"name": "in progress"}}
+    issue = JiraIssue("PROJ-1", raw_data, "https://test.net")
+    assert issue.status == Status.IN_PROGRESS
+
+def test_status_fallback_path()-> None:
+    """Test Issue.status property for missing or unknown status data."""
+    # 1. Test an unknown string (hits the .get(..., Status.TODO) line)
+    issue_unknown = JiraIssue("PROJ-2", {"status": {"name": "Ghost"}}, "https://test.net")
+    assert issue_unknown.status == Status.TODO
+
+    # 2. Test missing status dict (hits the 'else ""' and 'if not jira_status' lines)
+    issue_missing = JiraIssue("PROJ-3", {}, "https://test.net")
+    assert issue_missing.status == Status.TODO
+
+def test_jira_issue_basic_coverage()-> None:
+    """Test various properties for JiraIssue class."""
+    # A single raw_data blob containing every field we care about
+    raw_data = {
+        "summary": "Fix the flux capacitor",
+        "status": {"name": "In Progress"},
+        "assignee": {"emailAddress": "doc@brown.com", "displayName": "Emmett Brown"},
+        "duedate": "2026-12-31",
+        "description": "Standard string description",
+    }
+
+    issue = JiraIssue(issue_id="PROJ-123", raw_data=raw_data, base_url="https://jira.com/")
+
+    # Touching these properties executes the underlying logic
+    assert issue.id == "PROJ-123"
+    assert issue.title == "Fix the flux capacitor"
+    assert issue.status == Status.IN_PROGRESS
+    assert issue.assignee == "doc@brown.com"
+    assert issue.due_date == "2026-12-31"
+    assert issue.description == "Standard string description"
+
+def test_jira_issue_empty_fallbacks() -> None:
+    """Verify correct behavior when Issue properties are missing."""
+    # Empty data hits all the 'get(..., "")' and 'isinstance' fallback lines
+    issue = JiraIssue("PROJ-EMPTY", {}, "https://test.net")
+
+    assert issue.title == ""
+    assert issue.description == ""
+    assert issue.status == Status.TODO
+    assert issue.assignee is None
+    assert issue.due_date is None
+
+    # Touching __repr__ hits the base class code and uses id/title/status
+    assert "PROJ-EMPTY" in repr(issue)
+
+def test_description_adf_recursion_coverage() -> None:
+    """Test recursive behavior of Issue.description property."""
+    adf_data = {
+        "description": {
+            "type": "doc",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "Hello "}, {"type": "text", "text": "World"}],
+                },
+            ],
+        },
+    }
+    issue = JiraIssue("PROJ-1", adf_data, "https://test.net")
+
+    # This call executes the recursive _extract_adf_text function
+    assert issue.description == "Hello \nWorld"
+
+@patch("jira_client_impl.jira_impl.JiraClient._post")
+@patch("jira_client_impl.jira_impl.JiraClient._apply_status_transition")
+@patch("jira_client_impl.jira_impl.JiraClient.get_issue")
+def test_create_issue_full_coverage(
+    mock_get: MagicMock,
+    mock_transition : MagicMock,
+    mock_post : MagicMock,
+    jira_client : JiraClient,
+    ) -> None:
+    """Test create_issue method with mock http messages."""
+    # --- THE FIX: MANUALLY INJECT THE MOCK ---
+    jira_client._post = mock_post
+    jira_client._apply_status_transition = mock_transition
+    jira_client.get_issue = mock_get
+    # -----------------------------------------
+
+    # 1. Setup the mock return value for the initial POST
+    mock_post.return_value = {"key": "PROJ-101"}
+
+    # 2. Call the function
+    jira_client.create_issue(
+        title="Test Title",
+        description="Test Desc",
+        status=Status.IN_PROGRESS,
+        assignee="test@user.com",
+        due_date="2026-05-01",
+    )
+
+    # 3. Verify
+    mock_post.assert_called_once()
+
+    # Get the second argument (the JSON body)
+    # args[0] is path, args[1] is the body dict
+    args, _ = mock_post.call_args
+    posted_payload = args[1]["fields"]
+
+    assert posted_payload["summary"] == "Test Title"
+    assert posted_payload["assignee"] == {"emailAddress": "test@user.com"}
+    assert posted_payload["duedate"] == "2026-05-01"
+
+    # Verify the transition and get_issue were called
+    mock_transition.assert_called_once_with("PROJ-101", Status.IN_PROGRESS)
+    mock_get.assert_called_once_with("PROJ-101")
 
 #----------------------------------------------------------------------
 #                       JIRA BOARD TESTS

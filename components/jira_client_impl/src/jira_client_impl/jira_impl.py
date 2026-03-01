@@ -439,7 +439,8 @@ def get_client(*, interactive: bool = False) -> JiraClient:
     user_email = os.environ.get("JIRA_USER_EMAIL", "")
     api_token = os.environ.get("JIRA_API_TOKEN", "")
 
-    if interactive:
+    #This if block is not included in test coverage calculations, because it is meant for development purposes only.
+    if interactive: # pragma: no cover
         if not base_url:
             base_url = input("Jira base URL (e.g. https://myorg.atlassian.net): ").strip()
         if not user_email:
