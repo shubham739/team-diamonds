@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
@@ -76,6 +77,6 @@ class Board(ABC):
         """Delete an issue from the board."""
         raise NotImplementedError
 
-def build_board(board_id: str, raw_data: dict) -> Board:
+def build_board(board_id: str, raw_data: dict[str, Any]) -> Board:
     """Build and returns a board object."""
     raise NotImplementedError

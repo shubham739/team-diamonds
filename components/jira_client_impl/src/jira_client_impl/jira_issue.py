@@ -1,5 +1,7 @@
 """Jira Issue implementation."""
 
+from typing import Any
+
 from work_mgmt_client_interface.issue import Issue, Status
 
 # ---------------------------------------------------------------------------
@@ -52,7 +54,7 @@ class JiraIssue(Issue):
 
     """
 
-    def __init__(self, issue_id: str, raw_data: dict, base_url: str) -> None:
+    def __init__(self, issue_id: str, raw_data: dict[str, Any], base_url: str) -> None:
         """Initialize JiraIssue."""
         self._id = issue_id
         self._raw = raw_data
@@ -67,7 +69,8 @@ class JiraIssue(Issue):
     def title(self) -> str:
         """Return title."""
         #Jira calls "title" a "summary"
-        return self._raw.get("summary", "")
+        return str(self._raw.get("summary", ""))
+        #Need to cast the string as a string so that mypy believes that the string strings.
 
     @property
     def description(self) -> str:
@@ -109,12 +112,12 @@ class JiraIssue(Issue):
 # Extract data from ADF format which Jira stores description in
 # ---------------------------------------------------------------------------
 
-def _extract_adf_text(node: dict) -> str:
+def _extract_adf_text(node: dict[str, Any]) -> str:
     """Recursively extract plain text from an ADF document node."""
     if not isinstance(node, dict):
         return ""
     if node.get("type") == "text":
-        return node.get("text", "")
+        return str(node.get("text", ""))
     parts = [_extract_adf_text(child) for child in node.get("content") or []]
     return "\n".join(filter(None, parts))
 
@@ -123,7 +126,7 @@ def _extract_adf_text(node: dict) -> str:
 # Get issue
 # ---------------------------------------------------------------------------
 
-def get_issue(issue_id: str, raw_data: dict, base_url: str = "") -> JiraIssue:
+def get_issue(issue_id: str, raw_data: dict[str, Any], base_url: str = "") -> JiraIssue:
     """Return a JiraIssue from a Jira REST API issue response.
 
     Args:

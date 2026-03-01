@@ -79,6 +79,14 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
+    # Ignore abstract methods decorators
+    "@abstractmethod",
+    "@(abc\\.)?abstractmethod",
+
+    # Ignore common abstract bodies
+    "raise NotImplementedError",
+    "pass",
+    "\\.\\.\\.",   
 ]
 
 [tool.uv.sources]

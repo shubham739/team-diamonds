@@ -7,6 +7,7 @@ of the JiraClient class, mocking all external dependencies.
 #For now, we can run the tests in this file with this shell command "python -m pytest components/jira_client_impl/tests/test_core_methods.py -v"
 
 import os
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,21 +22,21 @@ from work_mgmt_client_interface.issue import IssueUpdate, Status
 def jira_client() -> JiraClient:
     """Return a JiraClient with mocked internal API methods."""
     client = JiraClient("https://test.atlassian.net", "test@example.com", "dummy_token")
-
+    client_any: Any = client
     # Mock the internal _get method to prevent real HTTP calls
-    client._get = MagicMock()
+    client_any._get = MagicMock()
 
     # Mock the internal _post method to prevent real HTTP calls
-    client._post = MagicMock()
+    client_any._post = MagicMock()
 
     # Mock build_issue to return a simple string for easy verification
     # (Bypasses the need to create fully populated JiraIssue dataclasses for these tests)
-    client.build_issue = MagicMock(side_effect=lambda x: f"MockIssue-{x['key']}")
+    client_any.build_issue = MagicMock(side_effect=lambda x: f"MockIssue-{x['key']}")
 
     return client
 
 #Tests for get_issues method
-def test_get_issues_builds_correct_jql(jira_client: JiraClient) -> None:
+def test_get_issues_builds_correct_jql(jira_client: Any) -> None:
     """Setup: Tell our mocked _get method what to return when called."""
     jira_client._get.return_value = {
         "issues": [{"key": "TEST-1"}, {"key": "TEST-2"}],
@@ -44,12 +45,12 @@ def test_get_issues_builds_correct_jql(jira_client: JiraClient) -> None:
 
     # Act: Call the method with a specific status filter
     # We wrap it in list() because get_issues is a generator (yield)
-    result = list(jira_client.get_issues(status=Status.IN_PROGRESS))
+    issues: Any = list(jira_client.get_issues(status=Status.IN_PROGRESS))
 
     # Assert: Did it yield our mock issues?
-    assert result == ["MockIssue-TEST-1", "MockIssue-TEST-2"]
+    assert issues == ["MockIssue-TEST-1", "MockIssue-TEST-2"]
 
-def test_get_issues_pagination(jira_client: JiraClient) -> None:
+def test_get_issues_pagination(jira_client: Any) -> None:
     """Setup: Simulate Jira returning data across two pages side_effect allows us to return different data on consecutive calls."""
     jira_client._get.side_effect = [
         {"issues": [{"key": "TEST-1"}, {"key": "TEST-2"}], "total": 3}, # First API call
@@ -57,13 +58,13 @@ def test_get_issues_pagination(jira_client: JiraClient) -> None:
     ]
 
     # Act: Ask for up to 5 results
-    result = list(jira_client.get_issues(max_results=5))
+    result: Any = list(jira_client.get_issues(max_results=5))
 
     # Assert: It should have combined all 3 issues from the 2 pages
     assert result == ["MockIssue-TEST-1", "MockIssue-TEST-2", "MockIssue-TEST-3"]
 
 
-def test_get_issues_when_no_issues_exits(jira_client: JiraClient) -> None:
+def test_get_issues_when_no_issues_exits(jira_client: Any) -> None:
     """Setup: Empty response to see verify correct behavior when no issues exist."""
     jira_client._get.return_value = {"issues": [], "total": 0}
 
@@ -149,7 +150,7 @@ def test_raise_for_status_500_raises_jira_error_sa() -> None:
 
 #-------------------------- tests for update_issue method --------------------------
 
-def test_update_issue_title_sa(jira_client: JiraClient) -> None:
+def test_update_issue_title_sa(jira_client: Any) -> None:
     """Test that update_issue correctly sends an updated title field to the Jira API."""
     # Setup: Mock _put for the update call, get_issue returns the refreshed issue
     jira_client._put = MagicMock(return_value={})
@@ -157,14 +158,14 @@ def test_update_issue_title_sa(jira_client: JiraClient) -> None:
 
     # Act: Update just the title — other fields remain None and should not be sent
     update = IssueUpdate(title="New Title")
-    result = jira_client.update_issue("TEST-1", update)
+    result: Any = jira_client.update_issue("TEST-1", update)
 
     # Assert: _put was called once with the updated fields, and updated issue is returned
     jira_client._put.assert_called_once()
     assert result == "MockIssue-TEST-1"
 
 
-def test_update_issue_with_status_calls_transition_sa(jira_client: JiraClient) -> None:
+def test_update_issue_with_status_calls_transition_sa(jira_client: Any) -> None:
     """Test that update_issue triggers a status transition when status is in the update."""
     # Setup: Mock _put and transition method, get_issue returns the refreshed issue
     jira_client._put = MagicMock(return_value={})
@@ -180,7 +181,7 @@ def test_update_issue_with_status_calls_transition_sa(jira_client: JiraClient) -
 
 
 
-def test_update_issue_with_no_changes_skips_put_sa(jira_client: JiraClient) -> None:
+def test_update_issue_with_no_changes_skips_put_sa(jira_client: Any) -> None:
     """Test that _put is NOT called when the IssueUpdate has no changed fields."""
     # Setup: Mock _put and get_issue
     jira_client._put = MagicMock(return_value={})
@@ -196,7 +197,7 @@ def test_update_issue_with_no_changes_skips_put_sa(jira_client: JiraClient) -> N
 #-------------------- tests for _apply_status_transition method --------------------
 
 
-def test_status_transition_finds_correct_transition_sa(jira_client: JiraClient) -> None:
+def test_status_transition_finds_correct_transition_sa(jira_client: Any) -> None:
     """Test correct transition."""
     # Mock transitions endpoint response
     jira_client._get.return_value = {
@@ -217,7 +218,7 @@ def test_status_transition_finds_correct_transition_sa(jira_client: JiraClient) 
     assert transition_id == "11"
 
 
-def test_status_transition_raises_error_when_no_matching_transition_sa(jira_client: JiraClient) -> None:
+def test_status_transition_raises_error_when_no_matching_transition_sa(jira_client: Any) -> None:
     """Test mock transitions endpoint response with no matching transition for COMPLETE."""
     jira_client._get.return_value = {
         "transitions": [
@@ -279,7 +280,7 @@ def test_text_to_adf_empty_string_sa() -> None:
     result = _text_to_adf("")
     assert result == expected_adf
 
-def test_text_to_adf_multiline_string_sa(jira_client: JiraClient) -> None:
+def test_text_to_adf_multiline_string_sa(jira_client: Any) -> None:
     """Test a multiline string - _text_to_adf wraps entire text in single paragraph."""
     ip_text="line 1\nline 2\nline 3"
     expected_adf={
@@ -300,7 +301,8 @@ def test_text_to_adf_multiline_string_sa(jira_client: JiraClient) -> None:
 def test_text_to_adf_non_string_input_sa() -> None:
     """Test non-string input to see if it raises the expected error."""
     with pytest.raises(JiraError) as exc_info:
-       _text_to_adf(12345)  # passing an integer instead of a string
+    # passing an integer instead of a string
+       _text_to_adf(12345)  # type: ignore[arg-type]
 
     assert str(exc_info.value) == "Input must be a string"
 
@@ -380,13 +382,15 @@ def test_create_issue_full_coverage(
     mock_get: MagicMock,
     mock_transition : MagicMock,
     mock_post : MagicMock,
-    jira_client : JiraClient,
+    jira_client : Any,
     ) -> None:
     """Test create_issue method with mock http messages."""
-    # --- THE FIX: MANUALLY INJECT THE MOCK ---
-    jira_client._post = mock_post
-    jira_client._apply_status_transition = mock_transition
-    jira_client.get_issue = mock_get
+    #Cast as any because mypy doesn't play well with MagicMock
+    client_as_any: Any = jira_client
+    # --- MANUALLY INJECT THE MOCK ---
+    client_as_any._post = mock_post
+    client_as_any._apply_status_transition = mock_transition
+    client_as_any.get_issue = mock_get
     # -----------------------------------------
 
     # 1. Setup the mock return value for the initial POST
@@ -422,7 +426,7 @@ def test_create_issue_full_coverage(
 #----------------------------------------------------------------------
 
 @pytest.fixture
-def jira_board() -> JiraBoard:
+def jira_board() -> Any:
     """Return a JiraBoard with a mocked JiraClient."""
     mock_client = MagicMock(spec=JiraClient)
     board = JiraBoard(
@@ -430,26 +434,27 @@ def jira_board() -> JiraBoard:
         _name="Test Board",
         _client=mock_client,
     )
+    board_any: Any = board
     # Mock _get_board_issues to prevent real HTTP calls
-    board._get_board_issues = MagicMock()
+    board_any._get_board_issues = MagicMock()
     return board
 
 
 # -------------------- tests for properties --------------------
 
-def test_jira_board_id_property_sa(jira_board: JiraBoard) -> None:
+def test_jira_board_id_property_sa(jira_board: Any) -> None:
     """Verify that the id property returns the correct board ID."""
     # Assert: id should match what was passed into the fixture
     assert jira_board.id == "1"
 
 
-def test_jira_board_name_property_sa(jira_board: JiraBoard) -> None:
+def test_jira_board_name_property_sa(jira_board: Any) -> None:
     """Verify that the name property returns the correct board name."""
     # Assert: name should match what was passed into the fixture
     assert jira_board.name == "Test Board"
 
 
-def test_jira_board_columns_property_sa(jira_board: JiraBoard) -> None:
+def test_jira_board_columns_property_sa(jira_board: Any) -> None:
     """Verify that the columns property returns the default set of board columns."""
     # Act: Get the columns
     columns = jira_board.columns
@@ -462,7 +467,7 @@ def test_jira_board_columns_property_sa(jira_board: JiraBoard) -> None:
     assert Status.CANCELLED in statuses
 
 
-def test_columns_returns_copy_not_original_sa(jira_board: JiraBoard) -> None:
+def test_columns_returns_copy_not_original_sa(jira_board: Any) -> None:
     """Test that modifying the returned columns list doesn't affect the board's internal state."""
     # Act: Get columns and modify the returned list
     columns = jira_board.columns
@@ -474,12 +479,12 @@ def test_columns_returns_copy_not_original_sa(jira_board: JiraBoard) -> None:
 
 # -------------------- tests for list_issues --------------------
 
-def test_list_issues_returns_all_issues_sa(jira_board: JiraBoard) -> None:
+def test_list_issues_returns_all_issues_sa(jira_board: Any) -> None:
     """Test that list_issues returns all issues when no status filter is given."""
     # Setup: Mock _get_board_issues to return two raw issues
     # Mock build_issue on the client to return simple mock issue objects
     raw_issues = [{"key": "TEST-1"}, {"key": "TEST-2"}]
-    jira_board._get_board_issues.return_value = raw_issues
+    jira_board._client._get.return_value = {"issues": raw_issues}
 
     mock_issue_1 = MagicMock(status=Status.TODO)
     mock_issue_2 = MagicMock(status=Status.IN_PROGRESS)
@@ -494,11 +499,11 @@ def test_list_issues_returns_all_issues_sa(jira_board: JiraBoard) -> None:
     assert mock_issue_2 in result
 
 
-def test_list_issues_filters_by_status_sa(jira_board: JiraBoard) -> None:
+def test_list_issues_filters_by_status_sa(jira_board: Any) -> None:
     """Test that list_issues correctly filters issues by the given status."""
     # Setup: Two issues with different statuses
     raw_issues = [{"key": "TEST-1"}, {"key": "TEST-2"}]
-    jira_board._get_board_issues.return_value = raw_issues
+    jira_board._client._get.return_value = {"issues": raw_issues}
 
     mock_issue_1 = MagicMock(status=Status.TODO)
     mock_issue_2 = MagicMock(status=Status.IN_PROGRESS)
@@ -513,10 +518,10 @@ def test_list_issues_filters_by_status_sa(jira_board: JiraBoard) -> None:
     assert mock_issue_2 not in result
 
 
-def test_list_issues_returns_empty_when_no_issues_sa(jira_board: JiraBoard) -> None:
+def test_list_issues_returns_empty_when_no_issues_sa(jira_board: Any) -> None:
     """Test that list_issues returns an empty list when the board has no issues."""
     # Setup: Mock _get_board_issues to return an empty list
-    jira_board._get_board_issues.return_value = []
+    jira_board._client._get.return_value = {"issues": []}
 
     # Act: Call list_issues with no filter
     result = jira_board.list_issues()
@@ -525,11 +530,11 @@ def test_list_issues_returns_empty_when_no_issues_sa(jira_board: JiraBoard) -> N
     assert result == []
 
 
-def test_list_issues_returns_empty_when_no_status_match_sa(jira_board: JiraBoard) -> None:
+def test_list_issues_returns_empty_when_no_status_match_sa(jira_board: Any) -> None:
     """Test that list_issues returns an empty list when no issues match the given status filter."""
     # Setup: Board has only TODO issues, but we filter by COMPLETE
     raw_issues = [{"key": "TEST-1"}]
-    jira_board._get_board_issues.return_value = raw_issues
+    jira_board._client._get.return_value = {"issues": raw_issues}
 
     mock_issue_1 = MagicMock(status=Status.TODO)
     jira_board._client.build_issue.return_value = mock_issue_1
@@ -541,23 +546,24 @@ def test_list_issues_returns_empty_when_no_status_match_sa(jira_board: JiraBoard
     assert result == []
 
 
-def test_list_issues_calls_get_board_issues_with_correct_fields_sa(jira_board: JiraBoard) -> None:
+def test_list_issues_calls_get_board_issues_with_correct_fields_sa(jira_board: Any) -> None:
     """Test that list_issues calls _get_board_issues with the correct fields parameter."""
     # Setup: Return empty list to keep test simple
-    jira_board._get_board_issues.return_value = []
+    jira_board._client._get.return_value = {"issues": []}
 
     # Act: Call list_issues
     jira_board.list_issues()
 
     # Assert: _get_board_issues should be called with the expected fields
-    jira_board._get_board_issues.assert_called_once_with(
-        fields="summary,description,status,assignee,duedate",
+    jira_board._client._get.assert_called_once_with(
+        "/board/1/issue",
+        params={"fields": "summary,description,status,assignee,duedate"},
     )
 
 
 # -------------------- tests for get_issue --------------------
 
-def test_get_issue_delegates_to_jira_client_sa(jira_board: JiraBoard) -> None:
+def test_get_issue_delegates_to_jira_client_sa(jira_board: Any) -> None:
     """Test that get_issue calls JiraClient.get_issue with the correct issue ID."""
     # Setup: Mock the client's get_issue to return a mock issue
     mock_issue = MagicMock()
@@ -571,7 +577,7 @@ def test_get_issue_delegates_to_jira_client_sa(jira_board: JiraBoard) -> None:
     assert result == mock_issue
 
 
-def test_get_issue_raises_when_issue_not_found_sa(jira_board: JiraBoard) -> None:
+def test_get_issue_raises_when_issue_not_found_sa(jira_board: Any) -> None:
     """Test that get_issue propagates IssueNotFoundError from the client when the requested issue does not exist."""
     from jira_client_impl.jira_impl import IssueNotFoundError
 
@@ -581,3 +587,63 @@ def test_get_issue_raises_when_issue_not_found_sa(jira_board: JiraBoard) -> None
     # Assert: The error should bubble up from the board to the caller
     with pytest.raises(IssueNotFoundError):
         jira_board.get_issue("FAKE-999")
+
+def test_board_create_issue_sa(jira_board: Any) -> None:
+    """Test that JiraBoard delegates create_issue to the underlying client."""
+    jira_board._client.create_issue.return_value = "MockCreatedIssue"
+
+    result = jira_board.create_issue(title="New Issue")
+
+    jira_board._client.create_issue.assert_called_once_with(
+        title="New Issue", description="", status=Status.TODO,
+    )
+    assert result == "MockCreatedIssue"
+
+
+def test_board_update_issue_sa(jira_board: Any) -> None:
+    """Test that JiraBoard delegates update_issue to the underlying client."""
+    update = IssueUpdate(title="Updated Title")
+    jira_board._client.update_issue.return_value = "MockUpdatedIssue"
+
+    result = jira_board.update_issue("TEST-1", update)
+
+    jira_board._client.update_issue.assert_called_once_with("TEST-1", update)
+    assert result == "MockUpdatedIssue"
+
+# -------------------- tests for raw HTTP network methods --------------------
+
+@patch("jira_client_impl.jira_impl.requests.Session")
+def test_raw_http_methods_sa(mock_session_class: MagicMock) -> None:
+    """Test the un-mocked internal HTTP helpers (_get, _post, _put, _delete)."""
+    # 1. Create a mock session that the JiraClient will use
+    mock_session = MagicMock()
+    mock_session_class.return_value = mock_session
+
+    # 2. Setup mock responses for the different HTTP methods
+    mock_get_resp = MagicMock(status_code=200, ok=True)
+    mock_get_resp.json.return_value = {"action": "get"}
+    mock_session.get.return_value = mock_get_resp
+
+    mock_post_resp = MagicMock(status_code=201, ok=True)
+    mock_post_resp.json.return_value = {"action": "post"}
+    mock_session.post.return_value = mock_post_resp
+
+    mock_put_resp = MagicMock(status_code=204, ok=True) # 204 triggers the NO_CONTENT branch
+    mock_session.put.return_value = mock_put_resp
+
+    mock_delete_resp = MagicMock(status_code=204, ok=True)
+    mock_session.delete.return_value = mock_delete_resp
+
+    # 3. Create a REAL client (we don't use the jira_client fixture here)
+    client = JiraClient("https://test.net", "user", "token")
+
+    # 4. Assert that the helpers correctly call the session and return the json
+    assert client._get("/path") == {"action": "get"}
+    assert client._post("/path", {"body": "test"}) == {"action": "post"}
+    assert client._put("/path", {"body": "test"}) == {}  # 204 returns empty dict
+    assert client._delete("/path") is True
+
+    # 5. Test the _delete 404 fallback branch
+    mock_delete_not_found = MagicMock(status_code=404, ok=False)
+    mock_session.delete.return_value = mock_delete_not_found
+    assert client._delete("/path") is False

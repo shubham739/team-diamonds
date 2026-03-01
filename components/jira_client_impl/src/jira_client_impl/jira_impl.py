@@ -22,7 +22,7 @@ import os
 import re
 from getpass import getpass
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -35,7 +35,6 @@ from jira_client_impl.jira_issue import get_issue as _make_issue
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Any
 # A precise definition of what JSON can actually contain!
 type JsonData = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None
 
@@ -130,26 +129,26 @@ class JiraClient(IssueTrackerClient):
         """Return base url."""
         return f"{self._base_url}{self._API_PREFIX}{path}"
 
-    def _get(self, path: str, params: dict | None = None) -> JsonData:
+    def _get(self, path: str, params: dict[str, Any] | None = None) -> JsonData:
         """Return json response for HTTP get message."""
         response = self._session.get(self._url(path), params=params)
         self._raise_for_status(response)
-        return response.json()
+        return cast("JsonData", response.json())
 
-    def _post(self, path: str, body: dict) -> JsonData:
+    def _post(self, path: str, body: dict[str, Any]) -> JsonData:
         """Send HTTP Post message and return response."""
         response = self._session.post(self._url(path), json=body)
         self._raise_for_status(response)
-        return response.json()
+        return cast("JsonData", response.json())
 
-    def _put(self, path: str, body: dict) -> JsonData:
+    def _put(self, path: str, body: dict[str, Any]) -> JsonData:
         """Perform put operation."""
         response = self._session.put(self._url(path), json=body)
         self._raise_for_status(response)
         # Jira PUT /issue returns 204 No Content on success
         if response.status_code == HTTPStatus.NO_CONTENT:
             return {}
-        return response.json()
+        return cast("JsonData", response.json())
 
     def _delete(self, path: str) -> bool:
         """Perform deletion."""
@@ -173,7 +172,7 @@ class JiraClient(IssueTrackerClient):
             msg = f"Jira API error {response.status_code}: {detail}"
             raise JiraError(msg)
 
-    def build_issue(self, issue: dict) -> JiraIssue:
+    def build_issue(self, issue: dict[str, Any]) -> JiraIssue:
         """Build Jira Issue."""
         return _make_issue(issue["key"], issue.get("fields", {}), self._base_url)
 
@@ -220,6 +219,10 @@ class JiraClient(IssueTrackerClient):
         """Fetch a single Jira issue by id."""
         #_get returns a json string, build_issue builds the Issue instance
         data = self._get(f"/issue/{issue_id}")
+
+        if not isinstance(data, dict):
+            msg = f"Jira API returned {type(data)} for issue {issue_id}, expected dict"
+            raise TypeError(msg)
         return self.build_issue(data)
 
     def get_issues(
@@ -256,7 +259,20 @@ class JiraClient(IssueTrackerClient):
                 "/search/jql",
                 params={"jql": jql, "startAt": start_at, "maxResults": page_size, "fields": "*all"},
             )
-            issues: list[dict] = data.get("issues", [])
+
+            if not isinstance(data, dict):
+                break
+
+            raw_issues = data.get("issues")
+            total = data.get("total", 0)
+
+            if not isinstance(raw_issues, list):
+                break
+
+            issues: list[dict[str, Any]] = [
+                i for i in raw_issues if isinstance(i, dict)
+            ]
+
             if not issues:
                 break
 
@@ -268,7 +284,7 @@ class JiraClient(IssueTrackerClient):
                 yielded += 1
 
             start_at += len(issues)
-            if start_at >= data.get("total", 0):
+            if isinstance(total, int) and start_at >= total:
                 break
 
     def create_issue(
@@ -297,13 +313,19 @@ class JiraClient(IssueTrackerClient):
 
         data = self._post("/issue", {"fields": fields})
 
+        if not isinstance(data, dict):
+            msg = "Excpected dict from Jira API"
+            raise TypeError(msg)
+
+        issue_key = str(data.get("key", ""))
+
         # Jira doesn't allow setting status directly, must go through the Transitions API
         # So it needs its own dedicated call
         # Status is set after the issue is created in Jira
         if status:
-            self._apply_status_transition(data["key"], status)
+            self._apply_status_transition(issue_key, status)
 
-        return self.get_issue(data["key"])
+        return self.get_issue(issue_key)
 
     def update_issue(self, issue_id: str, update: IssueUpdate) -> JiraIssue:
         """Update issue.
@@ -372,7 +394,17 @@ class JiraClient(IssueTrackerClient):
 
         #calls the Jira API to get a list of transitions available for this issue
         data = self._get(f"/issue/{issue_id}/transitions")
-        transitions: list[dict] = data.get("transitions", [])
+
+        if not isinstance(data, dict):
+            msg = "Expected dict from Jira API"
+            raise TypeError(msg)
+
+        raw_transitions = data.get("transitions", [])
+
+        if not isinstance(raw_transitions, list):
+                raw_transitions = []
+
+        transitions: list[dict[str, Any]] = [t for t in raw_transitions if isinstance(t, dict)]
 
         # build a lookup of available transition names -> transition object
         available = {t.get("name", "").lower(): t for t in transitions}
@@ -398,7 +430,7 @@ class JiraClient(IssueTrackerClient):
 # ADF builder -  Jira requires description data to be in this format
 # ---------------------------------------------------------------------------
 
-def _text_to_adf(text: str) -> dict:
+def _text_to_adf(text: str) -> dict[str, Any]:
     """Translate text to adf format.
 
     Notes on usage:

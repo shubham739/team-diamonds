@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
 from enum import StrEnum
+from typing import Any
 
 
 #we can alter these, these are just 4 common statuses that I thought would be good starting point.
@@ -27,7 +28,7 @@ class IssueUpdate:
     assignee: str | None = None
     due_date: str | None = None
 
-    def set_fields(self) -> dict:
+    def set_fields(self) -> dict[str, Any]:
         """Return a dict containing only the fields explicitly set to non-None values (the only ones to be updated)."""
         return {f.name: getattr(self, f.name) for f in dataclass_fields(self) if getattr(self, f.name) is not None}
 
@@ -75,7 +76,7 @@ class Issue(ABC):
         """Perform operation similar to Java .toString()."""
         return f"<Issue id={self.id!r} title={self.title!r} status={self.status}>"
 
-def build_issue(issue_id: str, raw_data: dict) -> "Issue":
+def build_issue(issue_id: str, raw_data: dict[str, Any]) -> "Issue":
     """Purpose: Retrieves API data and builds an Issue, returning an Issue instance.
 
     Notes on usage:

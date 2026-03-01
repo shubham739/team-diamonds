@@ -48,10 +48,21 @@ class JiraBoard(Board):
 
         Returns Issue objects (your JiraIssue adapter) by reusing JiraClient.build_issue().
         """
-        issues = self._get_board_issues(fields="summary,description,status,assignee,duedate")
+        data = self._client._get( # noqa: SLF001
+            f"/board/{self._board_id}/issue",
+            params={"fields": "summary,description,status,assignee,duedate"},
+        )
+        if not isinstance(data, dict):
+            return []
+
+        raw_issues = data.get("issues", [])
+        if not isinstance(raw_issues, list):
+            return []
 
         # Convert raw Agile "issues" to JiraIssue instances using your JiraClient
-        built: list[Issue] = [self._client.build_issue(i) for i in issues]  # type: ignore[attr-defined]
+        built: list[Issue] = [
+            self._client.build_issue(i)
+            for i in raw_issues if isinstance(i, dict)]
 
         if status is None:
             return built
