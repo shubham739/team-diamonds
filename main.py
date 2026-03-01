@@ -1,4 +1,9 @@
+#This file is for development purposes only
+
+import logging
+
 from jira_client_impl import get_client
+
 
 def main():
     print("Hello from team-diamonds!")
@@ -12,11 +17,11 @@ def main():
             print(f"- {issue}")
     except Exception as e:
         print(f"Error connecting to Jira: {e}")
-    
+
     try:
         issue = client.get_issue("OPS-20")
         print(f"- {issue}")
-    except:
+    except Exception as e:
         print(f"Error connecting to Jira: {e}")
 
 if __name__ == "__main__":
