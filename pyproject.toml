@@ -1,0 +1,93 @@
+[project]
+name = "team-diamonds"
+version = "0.1.0"
+description = "Template Repositiory for an Issue Tracker client"
+requires-python = ">=3.12"
+dependencies = [
+    "work-mgmt-client-interface",
+    "jira-client-impl",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.15",
+    "mkdocstrings-python>=1.16.12",
+    "mypy>=1.17.0",
+    "pymdown-extensions>=10.16.1",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.7",
+    "types-requests>=2.32.4.20250611",
+]
+
+[tool.uv.workspace]
+members = [
+    "components/work_mgmt_client_interface",
+    "components/jira_client_impl",
+]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+#main.py is being used for development and debugging and does not need to be checked by a strict ruff
+extend-exclude = ["main.py"] 
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D203", # `incorrect-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible. Ignoring `incorrect-blank-line-before-class`.
+  "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
+  "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
+]
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004"] }
+
+[tool.ruff.lint.pylint]
+max-args = 8
+
+[tool.mypy]
+strict = true
+explicit_package_bases = true # Required for src layout
+mypy_path = ["components/work_mgmt_client_interface/src", "components/jira_client_impl/src"]
+ignore_missing_imports = false
+warn_unused_ignores = false
+
+
+[tool.pytest.ini_options]
+pythonpath = [
+    ".", 
+    "components"
+]
+testpaths = ["tests", "components/*/tests"]
+addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+markers = [
+    "unit: marks tests as unit tests (fast, isolated)",
+    "integration: marks tests as integration tests (medium speed, real dependencies)",
+    "e2e: marks tests as end-to-end tests (slow, full system)",
+    "circleci: marks tests that can run in CI/CD environments without local credentials",
+    "local_credentials: marks tests that require local credentials.json or token.json files",
+]
+
+[tool.coverage.run]
+source = ["components"]
+omit = ["*/tests/*", "*/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 85 # Justification: A high threshold ensures most code is tested.
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    # Ignore abstract methods decorators
+    "@abstractmethod",
+    "@(abc\\.)?abstractmethod",
+
+    # Ignore common abstract bodies
+    "raise NotImplementedError",
+    "pass",
+    "\\.\\.\\.",   
+]
+
+[tool.uv.sources]
+work-mgmt-client-interface = {workspace = true}
+jira-client-impl = {workspace = true}
