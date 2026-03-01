@@ -1,4 +1,5 @@
-""" 
+"""Jira Client implementation.
+
 Authentication
 --------------
 The client supports two credential modes:
@@ -12,23 +13,31 @@ The client supports two credential modes:
 
 Dependencies:
     uv add requests
-        
+
 """
 #to avoid having to consider forward declarations, the below line must be first line in the file
 from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterator
 from getpass import getpass
-from typing import Any
+from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import requests
 from requests.auth import HTTPBasicAuth
+from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
+from work_mgmt_client_interface.client import IssueTrackerClient
+from work_mgmt_client_interface.issue import IssueUpdate, Status
 
-from jira_client_impl.jira_issue import JiraIssue, get_issue as _make_issue
-from work_mgmt_client_interface.client import IssueTrackerClient, IssueNotFoundError as BaseIssueNotFoundError
-from work_mgmt_client_interface.issue import Status, IssueUpdate
+from jira_client_impl.jira_issue import JiraIssue
+from jira_client_impl.jira_issue import get_issue as _make_issue
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from typing import Any
+# A precise definition of what JSON can actually contain!
+type JsonData = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -80,29 +89,33 @@ _STATUS_TO_JIRA_TRANSITION: dict[Status, list[str]] = {
 
 
 class JiraError(Exception):
-    """Raised when the Jira API returns an unexpected response."""
+    """Raise when the Jira API returns an unexpected response."""
 
 class IssueNotFoundError(BaseIssueNotFoundError):
-    """Raised when a requested Jira issue does not exist."""
+    """Raise when a requested Jira issue does not exist."""
 
 def sanitize_input(value: str) -> str:
-    return re.sub(JIRA_SPECIAL_CHARS, r'\\\1', value)
+    """Sanitize input."""
+    return re.sub(JIRA_SPECIAL_CHARS, r"\\\1", value)
 
 # ---------------------------------------------------------------------------
 # Client implementation
 # ---------------------------------------------------------------------------
 
 class JiraClient(IssueTrackerClient):
-    """
+    """Concrete implementation of the Client abstraction using Jira API.
+
     Args:
-        base_url:   Jira instance root URL (e.g. 'https://myorg.atlassian.net')
-        user_email: Email associated with the Jira 
-        api_token:  API token generated from Atlassian account settings
+    base_url:   Jira instance root URL (e.g. 'https://myorg.atlassian.net')
+    user_email: Email associated with the Jira
+    api_token:  API token generated from Atlassian account settings
+
     """
 
     _API_PREFIX = "/rest/api/3"
 
     def __init__(self, base_url: str, user_email: str, api_token: str) -> None:
+        """Initialize Jira Client."""
         self._base_url = base_url.rstrip("/")
         self._auth = HTTPBasicAuth(user_email, api_token)
         self._session = requests.Session()
@@ -114,46 +127,90 @@ class JiraClient(IssueTrackerClient):
     # ------------------------------------------------------------------
 
     def _url(self, path: str) -> str:
+        """Return base url."""
         return f"{self._base_url}{self._API_PREFIX}{path}"
 
-    def _get(self, path: str, params: dict | None = None) -> Any:
+    def _get(self, path: str, params: dict | None = None) -> JsonData:
+        """Return json response for HTTP get message."""
         response = self._session.get(self._url(path), params=params)
         self._raise_for_status(response)
         return response.json()
 
-    def _post(self, path: str, body: dict) -> Any:
+    def _post(self, path: str, body: dict) -> JsonData:
+        """Send HTTP Post message and return response."""
         response = self._session.post(self._url(path), json=body)
         self._raise_for_status(response)
         return response.json()
 
-    def _put(self, path: str, body: dict) -> Any:
+    def _put(self, path: str, body: dict) -> JsonData:
+        """Perform put operation."""
         response = self._session.put(self._url(path), json=body)
         self._raise_for_status(response)
         # Jira PUT /issue returns 204 No Content on success
-        if response.status_code == 204:
+        if response.status_code == HTTPStatus.NO_CONTENT:
             return {}
         return response.json()
 
     def _delete(self, path: str) -> bool:
+        """Perform deletion."""
         response = self._session.delete(self._url(path))
-        if response.status_code == 404:
+        if response.status_code == HTTPStatus.NOT_FOUND:
             return False
         self._raise_for_status(response)
         return True
 
     @staticmethod
     def _raise_for_status(response: requests.Response) -> None:
-        if response.status_code == 404:
-            raise IssueNotFoundError(f"Resource not found: {response.url}")
+        """Raise appropiate error."""
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            msg = f"Resource not found: {response.url}"
+            raise IssueNotFoundError(msg)
         if not response.ok:
             try:
                 detail = response.json()
-            except Exception:
+            except ValueError:
                 detail = response.text
-            raise JiraError(f"Jira API error {response.status_code}: {detail}")
+            msg = f"Jira API error {response.status_code}: {detail}"
+            raise JiraError(msg)
 
-    def _build_issue(self, issue: dict) -> JiraIssue:
+    def build_issue(self, issue: dict) -> JiraIssue:
+        """Build Jira Issue."""
         return _make_issue(issue["key"], issue.get("fields", {}), self._base_url)
+
+    def _build_jql_query(
+        self,
+        title: str | None = None,
+        description: str | None = None,
+        status: Status | None = None,
+        assignee: str | None = None,
+        due_date: str | None = None,
+    ) -> str:
+        """Construct a JQL query string based on provided filters."""
+        clauses: list[str] = []
+
+        if title:
+            clean_title = sanitize_input(title)
+            # summary is Jira's term for "title"
+            clauses.append(f"summary ~ '{clean_title}'")
+        if description:
+            clean_description = sanitize_input(description)
+            clauses.append(f"description ~ '{clean_description}'")
+        if status:
+            # value comes from an internal hardcoded map, not user input, so no sanitization needed
+            clauses.append(f"status = {_STATUS_TO_JQL[status]}")
+        if due_date:
+            clean_due_date = sanitize_input(due_date)
+            clauses.append(f"due = '{clean_due_date}'")
+        if assignee:
+            clean_assignee = sanitize_input(assignee)
+            clauses.append(f"assignee = '{clean_assignee}'")
+
+        # build JQL query
+        # Jira requires a bounding clause for queries. Adding this dummy bound bypasses that requirement
+        if not clauses:
+            clauses.append("project IS NOT EMPTY")
+
+        return " AND ".join(clauses) + " ORDER BY updated DESC"
 
     # ------------------------------------------------------------------
     # IssueTrackerClient contract
@@ -161,9 +218,9 @@ class JiraClient(IssueTrackerClient):
 
     def get_issue(self, issue_id: str) -> JiraIssue:
         """Fetch a single Jira issue by id."""
-        #_get returns a json string, _build_issue builds the Issue instance
+        #_get returns a json string, build_issue builds the Issue instance
         data = self._get(f"/issue/{issue_id}")
-        return self._build_issue(data)
+        return self.build_issue(data)
 
     def get_issues(
         self,
@@ -174,42 +231,26 @@ class JiraClient(IssueTrackerClient):
         assignee: str | None = None,
         due_date: str | None = None,
         max_results: int = 20,
-        ) -> Iterator[JiraIssue]:
-        """
+    ) -> Iterator[JiraIssue]:
+        """Get issues.
+
         Iteration stops once "max_results" number of issues have been yielded or no more results exist.
         """
-        print("In get_issues...")
-        clauses: list[str] = []
-        if title:
-            clean_title = sanitize_input(title)
-            #summary is Jira's term for "title"
-            clauses.append(f"summary ~ '{clean_title}'")
-        if description:
-            clean_description = sanitize_input(description)
-            clauses.append(f"description ~ '{clean_description}'")
-        if status:
-            #value comes from an internal hardcoded map, not user input, so no sanitization needed
-            clauses.append(f"status = {_STATUS_TO_JQL[status]}")
-        if due_date:
-            clean_due_date = sanitize_input(due_date)
-            clauses.append(f"due = '{clean_due_date}'")
-        if assignee:
-            clean_assignee = sanitize_input(assignee)
-            clauses.append(f"assignee = '{clean_assignee}'")
-
-        #build JQL query
-        #Jira requires a bounding clause for queries. Adding this dummy bound bypasses that requirement
-        if not clauses:
-            clauses.append("project IS NOT EMPTY")
-        jql = " AND ".join(clauses) + " ORDER BY updated DESC"
+        # 1. Delegate the complex JQL string building to our new helper method
+        jql = self._build_jql_query(
+            title=title,
+            description=description,
+            status=status,
+            assignee=assignee,
+            due_date=due_date,
+        )
 
         start_at = 0
-        page_size = min(max_results, 100) #Jira's maximum is 100
+        page_size = min(max_results, 100)  # Jira's maximum is 100
         yielded = 0
 
-        print("Before while loop")
-        #Each iteration makes one API request, fetching the next page
-        #stop requesting pages when we have passed the total number of issues Jira reported
+        # 2. Each iteration makes one API request, fetching the next page
+        # Stop requesting pages when we have passed the total number of issues Jira reported
         while yielded < max_results:
             data = self._get(
                 "/search/jql",
@@ -219,11 +260,11 @@ class JiraClient(IssueTrackerClient):
             if not issues:
                 break
 
-            #builds issue and increments yield count until max_results is met
+            # Builds issue and increments yield count until max_results is met
             for issue in issues:
                 if yielded >= max_results:
                     return
-                yield self._build_issue(issue)
+                yield self.build_issue(issue)
                 yielded += 1
 
             start_at += len(issues)
@@ -239,9 +280,7 @@ class JiraClient(IssueTrackerClient):
         assignee: str | None = None,
         due_date: str | None = None,
         ) -> JiraIssue:
-        # TODO: Add a project propery -- this is similar to "board". 
         # A board is a required field in Jira, and likely all other issue tracker implementations
-
         """Create a new Jira issue and return it as a JiraIssue."""
         #required fields -- title and issue type
         fields: dict[str, Any] = {
@@ -255,7 +294,7 @@ class JiraClient(IssueTrackerClient):
             fields["assignee"] = {"emailAddress": assignee}
         if due_date:
             fields["duedate"] = due_date
-        
+
         data = self._post("/issue", {"fields": fields})
 
         # Jira doesn't allow setting status directly, must go through the Transitions API
@@ -267,12 +306,13 @@ class JiraClient(IssueTrackerClient):
         return self.get_issue(data["key"])
 
     def update_issue(self, issue_id: str, update: IssueUpdate) -> JiraIssue:
-        """
+        """Update issue.
+
         Args:
             issue_id: The Jira issue id
             update:  An "IssueUpdate" dataclass instance with the desired changes
 
-        Notes on usage: 
+        Notes on usage:
             Applies an IssueUpdate to an existing Jira issue and return the updated issue
             Fields left as "None" are not sent to the API and remain unchanged
             Status changes are handled via the Jira Transitions API because Jira does not allow direct status field edits
@@ -283,6 +323,7 @@ class JiraClient(IssueTrackerClient):
         Raises:
             IssueNotFoundError: If the issue does not exist.
             JiraError: If a requested status transition is unavailable.
+
         """
         changed = update.set_fields()
 
@@ -307,9 +348,8 @@ class JiraClient(IssueTrackerClient):
         return self.get_issue(issue_id)
 
     def delete_issue(self, issue_id: str) -> None:
-        """
-        Notes on usage:
-            Deletes a Jira issue, and will raise error if issue is not found
+        """Delete a Jira issue, and will raise error if issue is not found.
+
         Raises:
             IssueNotFoundError: If no issue with that ID exists.
 
@@ -322,14 +362,14 @@ class JiraClient(IssueTrackerClient):
     # ------------------------------------------------------------------
 
     def _apply_status_transition(self, issue_id: str, target: Status) -> None:
-        """
-        Transitions are named actions in Jira that move one Issue from one status to another. 
-        You have to ask Jira which transitions are available for specific issue, and then trigger 
+        """Transition are named actions in Jira that move one Issue from one status to another.
+
+        You have to ask Jira which transitions are available for specific issue, and then trigger
         said transition by its ID.
         """
         #since our status value have an undercore, this changes the underscores to spaces, and lowers text
-        target_name = target.value.replace("_", " ").lower()
-        
+        target.value.replace("_", " ").lower()
+
         #calls the Jira API to get a list of transitions available for this issue
         data = self._get(f"/issue/{issue_id}/transitions")
         transitions: list[dict] = data.get("transitions", [])
@@ -345,10 +385,11 @@ class JiraClient(IssueTrackerClient):
                 break
         #raises Jira error if there are no available transitions
         if match is None:
-            raise JiraError(
+            msg = (
                 f"No transition to '{target.value}' found for {issue_id}. "
                 f"Available transitions: {list(available.keys())}"
             )
+            raise JiraError(msg)
 
         self._post(f"/issue/{issue_id}/transitions", {"transition": {"id": match["id"]}})
 
@@ -358,12 +399,15 @@ class JiraClient(IssueTrackerClient):
 # ---------------------------------------------------------------------------
 
 def _text_to_adf(text: str) -> dict:
-    """
-    Notes on usage: 
-        Jira Cloud requires that certain fields, particularly description, are sent to the API in Atlassian Document Format (ADF), otherwise it will be rejected
+    """Translate text to adf format.
+
+    Notes on usage:
+    Jira Cloud requires that certain fields, particularly description, are sent to the API in Atlassian Document Format (ADF),
+    otherwise it will be rejected
     """
     if not isinstance(text, str):
-        raise JiraError("Input must be a string")
+        msg = "Input must be a string"
+        raise JiraError(msg)
     return {
         "type": "doc",
         "version": 1,
@@ -371,7 +415,7 @@ def _text_to_adf(text: str) -> dict:
             {
                 "type": "paragraph",
                 "content": [{"type": "text", "text": text}],
-            }
+            },
         ],
     }
 
@@ -403,16 +447,17 @@ def get_client(*, interactive: bool = False) -> JiraClient:
         if not api_token:
             api_token = getpass("Jira API token: ")
     else:
-        #collects the missing fields and raises an error alerting to the missing values 
+        #collects the missing fields and raises an error alerting to the missing values
         missing = [name for name, val in [
             ("JIRA_BASE_URL", base_url),
             ("JIRA_USER_EMAIL", user_email),
             ("JIRA_API_TOKEN", api_token),
         ] if not val]
         if missing:
-            raise EnvironmentError(
+            msg = (
                 f"Missing required environment variables: {', '.join(missing)}. "
                 "Set them or call get_client(interactive=True)."
             )
+            raise OSError(msg)
 
     return JiraClient(base_url, user_email, api_token)

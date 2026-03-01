@@ -1,4 +1,6 @@
-from work_mgmt_client_interface.issue import Status, Issue
+"""Jira Issue implementation."""
+
+from work_mgmt_client_interface.issue import Issue, Status
 
 # ---------------------------------------------------------------------------
 # Mapping tables: Jira-native values  →  normalized enum values
@@ -47,24 +49,29 @@ class JiraIssue(Issue):
         issue_id:  The Jira issue key (e.g. 'PROJ-42').
         raw_data: The ``fields``-level dict from the Jira REST API response.
         base_url: The base URL of the Jira instance (e.g. 'https://myorg.atlassian.net').
+
     """
 
     def __init__(self, issue_id: str, raw_data: dict, base_url: str) -> None:
+        """Initialize JiraIssue."""
         self._id = issue_id
         self._raw = raw_data
         self._base_url = base_url.rstrip("/")
 
     @property
     def id(self) -> str:
+        """Return id."""
         return self._id
 
     @property
     def title(self) -> str:
+        """Return title."""
         #Jira calls "title" a "summary"
         return self._raw.get("summary", "")
 
     @property
     def description(self) -> str:
+        """Extract description from ADF format."""
         # Jira Cloud returns description as Atlassian Document Format (ADF).
         # So description must be extracted from adf format
         desc = self._raw.get("description")
@@ -77,6 +84,7 @@ class JiraIssue(Issue):
 
     @property
     def status(self) -> Status:
+        """Return status."""
         status_name: str = (
             self._raw.get("status", {}).get("name", "") if isinstance(self._raw.get("status"), dict) else ""
         )
@@ -84,6 +92,7 @@ class JiraIssue(Issue):
 
     @property
     def assignee(self) -> str | None:
+        """Return name to task assignee."""
         assignee = self._raw.get("assignee")
         if not assignee:
             return None
@@ -92,6 +101,7 @@ class JiraIssue(Issue):
 
     @property
     def due_date(self) -> str | None:
+        """Return due date."""
         return self._raw.get("duedate") or None
 
 
@@ -105,9 +115,7 @@ def _extract_adf_text(node: dict) -> str:
         return ""
     if node.get("type") == "text":
         return node.get("text", "")
-    parts: list[str] = []
-    for child in node.get("content") or []:
-        parts.append(_extract_adf_text(child))
+    parts = [_extract_adf_text(child) for child in node.get("content") or []]
     return "\n".join(filter(None, parts))
 
 
@@ -125,5 +133,6 @@ def get_issue(issue_id: str, raw_data: dict, base_url: str = "") -> JiraIssue:
 
     Returns:
         A JiraIssue instance conforming to the Issue contract.
+
     """
     return JiraIssue(issue_id, raw_data, base_url)

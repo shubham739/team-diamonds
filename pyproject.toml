@@ -31,6 +31,8 @@ members = [
 [tool.ruff]
 line-length = 130
 target-version = "py312"
+#main.py is being used for development and debugging and does not need to be checked by a strict ruff
+extend-exclude = ["main.py"] 
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -39,7 +41,10 @@ ignore = [
   "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
   "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415"] }
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004"] }
+
+[tool.ruff.lint.pylint]
+max-args = 8
 
 [tool.mypy]
 strict = true
