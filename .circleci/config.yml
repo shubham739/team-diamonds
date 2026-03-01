@@ -287,6 +287,7 @@ workflows:
       - circleci_test:
           requires:
             - unit_test
+          context: jira-client # Context containing Jira API credentials
           filters:
             branches:
               only:
@@ -295,7 +296,7 @@ workflows:
       - integration_test:
           requires:
             - circleci_test # Run after CircleCI tests pass
-          context: jira-client # Context containing Gmail API credentials
+          context: jira-client # Context containing Jira API credentials
           filters:
             branches:
               only:

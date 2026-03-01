@@ -69,7 +69,6 @@ def test_get_issues_when_no_issues_exits(jira_client):
 
     assert result == []
 
-<<<<<<< HEAD
 #--------------------------- tests for get_client function --------------------------
 
 def test_get_client_raises_when_env_vars_missing_sa():
@@ -309,8 +308,6 @@ def test_text_to_adf_non_string_input_sa():
        result = _text_to_adf(12345)  # passing an integer instead of a string
     
     assert str(exc_info.value) == "Input must be a string"
-=======
-
 
 #----------------------------------------------------------------------
 #                       JIRA BOARD TESTS
@@ -479,4 +476,3 @@ def test_get_issue_raises_when_issue_not_found_sa(jira_board):
     # Assert: The error should bubble up from the board to the caller
     with pytest.raises(IssueNotFoundError):
         jira_board.get_issue("FAKE-999")
->>>>>>> chz9577-hw1-boardfeat
