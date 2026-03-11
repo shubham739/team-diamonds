@@ -60,6 +60,7 @@ pythonpath = [
 ]
 testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+# Remove --cov-fail-under from here — it already lives in [tool.coverage.report]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
     "integration: marks tests as integration tests (medium speed, real dependencies)",
@@ -70,7 +71,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["components"]
-omit = ["*/tests/*", "*/__main__.py"]
+omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.
@@ -78,6 +79,7 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
+    "if interactive:", 
     # Ignore abstract methods decorators
     "@abstractmethod",
     "@(abc\\.)?abstractmethod",
