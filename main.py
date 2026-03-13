@@ -3,12 +3,20 @@
 import logging
 
 from jira_client_impl import get_client
+from fastapi import FastAPI
 
+#fast API connection to the server
+app = FastAPI()
+
+@app.get("/")
+def root():
+    client = get_client(interactive=True)
+    return {"message": client.get_issues(max_results=5)}
 
 def main():
     print("Hello from team-diamonds!")
     client = get_client(interactive=True)
-
+    
     print("\nFetching recent issues...")
     # Let's test the get_issues generator
     try:

@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "work-mgmt-client-interface",
     "jira-client-impl",
+    "fastapi[standard]>=0.100.0",
 ]
 
 [project.optional-dependencies]
@@ -91,3 +92,6 @@ exclude_lines = [
 [tool.uv.sources]
 work-mgmt-client-interface = {workspace = true}
 jira-client-impl = {workspace = true}
+
+[tool.fastapi]
+entrypoint = "main:app"
