@@ -1,14 +1,12 @@
-#This file is for development purposes only
+"""FastAPI server with Jira OAuth2 authentication and work management endpoints."""
 
 import os
+import secrets
 from dotenv import load_dotenv
 
 # loading .env from inside .venv
-venv_env_path = os.path.join(os.path.dirname(__file__), '.venv', '.env')
+venv_env_path = os.path.join(os.path.dirname(__file__), ".venv", ".env")
 load_dotenv(venv_env_path)
-
-import logging
-import secrets
 from jira_client_impl import get_client
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
@@ -23,27 +21,29 @@ from auth import (
 )
 
 
-#fast API connection to the server
+# Fast API connection to the server
 app = FastAPI()
 
 auth_states: dict[str, str] = {}
 
 
 @app.get("/health")
-def health_check():
-    client = get_client(interactive=True)
+def health_check() -> dict[str, str]:
+    """Health check endpoint."""
+    client = get_client(interactive=False)
     return {"status": "ok"}
 
 
 @app.get("/auth/login")
-def login():
+def login() -> RedirectResponse:
+    """Initiate OAuth2 login flow by redirecting to Jira."""
     state = secrets.token_urlsafe(32)
     auth_states[state] = state
     auth_url = get_authorize_url(state)
     return RedirectResponse(url=auth_url)
 
 @app.get("/auth/callback")
-def callback(code: str, state: str):
+def callback(code: str, state: str) -> dict[str, str | None]:
     if state not in auth_states:
         raise HTTPException(status_code=400, detail="Invalid state parameter")
     
@@ -69,15 +69,21 @@ def callback(code: str, state: str):
 
 
 @app.get("/auth/logout")
-def logout(user_id: str):
+def logout(user_id: str) -> dict[str, str]:
+    """Clear user session and log out."""
     if user_id in user_sessions:
         del user_sessions[user_id]
     return {"status": "logged out"}
 
 @app.get("/")
-def root():
-    client = get_client(interactive=True)
-    return {"message": client.get_issues(max_results=5)}
+def root() -> dict:
+    """Fetch Jira issues via local library."""
+    client = get_client(interactive=False)
+    issues = [
+        {"id": issue.id, "title": issue.title, "status": str(issue.status)}
+        for issue in client.get_issues(max_results=5)
+    ]
+    return {"issues": issues}
 
 
 

@@ -22,7 +22,7 @@ import os
 import re
 from getpass import getpass
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -35,8 +35,9 @@ from jira_client_impl.jira_issue import get_issue as _make_issue
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
 # A precise definition of what JSON can actually contain!
-type JsonData = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None
+JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None
 
 # ---------------------------------------------------------------------------
 # Internal helpers
