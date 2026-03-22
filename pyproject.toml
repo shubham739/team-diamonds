@@ -42,6 +42,9 @@ ignore = [
 ]
 per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004"] }
 
+[tool.ruff.lint.isort]
+known-first-party = ["jira_client_impl", "work_mgmt_client_interface"]
+
 [tool.ruff.lint.pylint]
 max-args = 8
 

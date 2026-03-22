@@ -4,6 +4,7 @@ import logging
 import os
 
 import pytest
+
 from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_impl import JiraClient, get_client
 from jira_client_impl.jira_issue import JiraIssue, get_issue

@@ -26,12 +26,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 import requests
 from requests.auth import HTTPBasicAuth
-from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
-from work_mgmt_client_interface.client import IssueTrackerClient
-from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 from jira_client_impl.jira_issue import JiraIssue
 from jira_client_impl.jira_issue import get_issue as _make_issue
+from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
+from work_mgmt_client_interface.client import IssueTrackerClient
+from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
