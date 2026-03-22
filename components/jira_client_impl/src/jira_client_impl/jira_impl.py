@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 # A precise definition of what JSON can actually contain!
-JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None
+JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None  # noqa: UP040
 
 # ---------------------------------------------------------------------------
 # Internal helpers
