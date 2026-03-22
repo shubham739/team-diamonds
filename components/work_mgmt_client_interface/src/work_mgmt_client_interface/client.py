@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
 
-
 class IssueTrackerClient(ABC):
     """Tracks issues."""
 
