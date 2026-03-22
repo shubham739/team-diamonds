@@ -1,0 +1,9 @@
+site_name: Team Diamonds
+
+nav:
+  - Home: README.md
+  - Design: DESIGN.md
+  - Contributing: CONTRIBUTING.md
+  - Components:
+    - Interface: INTERFACE.md
+    - Jira Implementation: IMPLEMENTATION_JIRA.md
