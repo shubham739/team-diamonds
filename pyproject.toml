@@ -10,6 +10,8 @@ dependencies = [
     "requests>=2.31.0",
     "authlib>=1.2.0",
     "python-dotenv>=1.0.0",
+    "jira-service-api-client",
+    "uvicorn>=0.41.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ dev = [
 members = [
     "components/work_mgmt_client_interface",
     "components/jira_client_impl",
+    "jira_service_api_client",
 ]
 
 [tool.ruff]
@@ -95,6 +98,7 @@ exclude_lines = [
 [tool.uv.sources]
 work-mgmt-client-interface = {workspace = true}
 jira-client-impl = {workspace = true}
+jira-service-api-client = {workspace = true}
 
 [tool.fastapi]
 entrypoint = "main:app"
