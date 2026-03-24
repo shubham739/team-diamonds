@@ -44,10 +44,15 @@ def exchange_code_for_token(code: str) -> dict | None:
         "code": code,
         "redirect_uri": JIRA_OAUTH_REDIRECT_URI,
     }
-    response = requests.post(JIRA_TOKEN_URL, data=data, timeout=10)
-    if response.status_code != HTTP_OK:
+    try:
+        response = requests.post(JIRA_TOKEN_URL, data=data, timeout=10)
+        if response.status_code != HTTP_OK:
+            print(f"Token exchange failed: {response.status_code} - {response.text}")
+            return None
+        return response.json()
+    except Exception as e:
+        print(f"Error exchanging code for token: {e}")
         return None
-    return response.json()
 
 
 def refresh_access_token(refresh_token: str) -> dict | None:
@@ -66,12 +71,15 @@ def refresh_access_token(refresh_token: str) -> dict | None:
 def get_user_info(access_token: str) -> dict | None:
     """Retrieve authenticated user information from Jira API."""
     headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(JIRA_API_URL, headers=headers, timeout=10)
-
-    if response.status_code != HTTP_OK:
+    try:
+        response = requests.get(JIRA_API_URL, headers=headers, timeout=10)
+        if response.status_code != HTTP_OK:
+            print(f"Get user info failed: {response.status_code} - {response.text}")
+            return None
+        return response.json()
+    except Exception as e:
+        print(f"Error getting user info: {e}")
         return None
-
-    return response.json()
 
 def store_session(user_id: str, token_data: dict) -> None:
     """Store user session with access and refresh tokens."""
