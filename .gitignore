@@ -211,3 +211,28 @@ __marimo__/
 jira_service_api_client/*
 !jira_service_api_client/pyproject.toml
 openapi.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Env
+.env
+.venv/
+venv/
+
+# Mac
+.DS_Store
+
+# OpenAPI generated
+jira_service_api_client/
+openapi.json
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
