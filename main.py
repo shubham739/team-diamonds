@@ -44,7 +44,12 @@ auth_states: dict[str, str] = {}
 @app.get("/health")
 def health_check() -> dict[str, str]:
     """Health check endpoint."""
-    client = get_client(interactive=False)
+    try:
+        client = get_client(interactive=False)
+    except OSError:
+        # Return healthy status even if Jira client can't be initialized
+        # (environment variables may not be set yet)
+        pass
     return {"status": "ok"}
 
 
@@ -95,12 +100,18 @@ def logout(user_id: str) -> dict[str, str]:
 @app.get("/")
 def root(token: str = Depends(oauth2_scheme)) -> dict:
     """Fetch Jira issues via local library."""
-    client = get_client(interactive=False)
-    issues = [
-        {"id": issue.id, "title": issue.title, "status": str(issue.status)}
-        for issue in client.get_issues(max_results=5)
-    ]
-    return {"issues": issues}
+    try:
+        client = get_client(interactive=False)
+        issues = [
+            {"id": issue.id, "title": issue.title, "status": str(issue.status)}
+            for issue in client.get_issues(max_results=5)
+        ]
+        return {"issues": issues}
+    except OSError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Jira client not configured: {str(e)}"
+        )
 
 
 # ------------------------------------------------------------------

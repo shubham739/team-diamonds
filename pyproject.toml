@@ -58,6 +58,10 @@ explicit_package_bases = true # Required for src layout
 mypy_path = ["components/work_mgmt_client_interface/src", "components/jira_client_impl/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
+exclude = [
+    "jira_service_api_client/",
+    "main.py",
+]
 
 
 [tool.pytest.ini_options]
