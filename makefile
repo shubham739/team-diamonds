@@ -1,4 +1,7 @@
-.PHONY: generate-client
+.PHONY: install generate-client setup
+
+install:
+	uv sync
 
 generate-client:
 	uvicorn main:app &
@@ -8,14 +11,7 @@ generate-client:
 		--path openapi.json \
 		--config openapi_client_config.yaml \
 		--meta none
-	cp jira_service_api_client/pyproject.toml.bak jira_service_api_client/pyproject.toml || true
 	pkill -f "uvicorn main:app"
-```
+	uv sync
 
-But there's a problem — the `pyproject.toml` inside `jira_service_api_client/` gets wiped on regeneration and needs to be manually re-added every time. The clean solution is to **keep `pyproject.toml` in version control** but ignore the rest:
-
-Update `.gitignore`:
-```
-jira_service_api_client/*
-!jira_service_api_client/pyproject.toml
-openapi.json
+setup: install generate-client
