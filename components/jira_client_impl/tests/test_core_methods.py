@@ -11,6 +11,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_impl import IssueNotFoundError, JiraClient, JiraError, _text_to_adf, get_client
 from jira_client_impl.jira_issue import JiraIssue
