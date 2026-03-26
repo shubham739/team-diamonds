@@ -11,7 +11,7 @@ dependencies = [
     "authlib>=1.2.0",
     "python-dotenv>=1.0.0",
     "jira-service-api-client",
-    "uvicorn>=0.41.0",
+    "uvicorn[standard]>=0.41.0",
 ]
 
 [project.optional-dependencies]

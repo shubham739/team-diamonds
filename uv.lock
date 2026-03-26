@@ -1518,7 +1518,7 @@ dependencies = [
     { name = "jira-service-api-client" },
     { name = "python-dotenv" },
     { name = "requests" },
-    { name = "uvicorn" },
+    { name = "uvicorn", extra = ["standard"] },
     { name = "work-mgmt-client-interface" },
 ]
 
@@ -1552,7 +1552,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.31.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.7" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.4.20250611" },
-    { name = "uvicorn", specifier = ">=0.41.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
     { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["dev"]
