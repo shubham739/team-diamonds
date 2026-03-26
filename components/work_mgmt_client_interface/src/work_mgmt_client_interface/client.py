@@ -5,8 +5,6 @@ from collections.abc import Iterator
 
 from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
-__all__ = ["IssueTrackerClient", "get_client"]
-
 
 class IssueTrackerClient(ABC):
     """Tracks issues."""
