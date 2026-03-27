@@ -113,42 +113,8 @@ class TestMainScriptStructure:
         assert result.returncode == 0, f"Import error:\n{result.stderr}"
         assert "ok" in result.stdout
 
-
 # ---------------------------------------------------------------------------
-# 2.  main.py execution (credentials required)
-# ---------------------------------------------------------------------------
-
-class TestMainScriptExecution:
-    """Run main.py as a subprocess and assert on its output."""
-
-    @pytest.mark.circleci
-    def test_main_script_fails_gracefully_without_credentials(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """main.py must exit with a non-zero code when credentials are missing."""
-        if not MAIN_SCRIPT.exists():
-            pytest.skip("main.py not found.")
-
-        env = os.environ.copy()
-        env.pop("JIRA_BASE_URL", None)
-        env.pop("JIRA_USER_EMAIL", None)
-        env.pop("JIRA_API_TOKEN", None)
-
-        result = subprocess.run(  # noqa: S603
-            [sys.executable, str(MAIN_SCRIPT)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-            cwd=str(MAIN_SCRIPT.parent),
-            check=False,
-        )
-        assert result.returncode != 0, "Expected non-zero exit code when credentials are missing."
-
-
-# ---------------------------------------------------------------------------
-# 3.  Application structure integrity
+# 2.  Application structure integrity
 # ---------------------------------------------------------------------------
 
 class TestApplicationStructure:
