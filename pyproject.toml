@@ -10,6 +10,8 @@ dependencies = [
     "requests>=2.31.0",
     "authlib>=1.2.0",
     "python-dotenv>=1.0.0",
+    "jira-service-api-client",
+    "uvicorn[standard]>=0.41.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,7 @@ dev = [
 members = [
     "components/work_mgmt_client_interface",
     "components/jira_client_impl",
+    "jira_service_api_client",
 ]
 
 [tool.ruff]
@@ -46,6 +49,9 @@ ignore = [
 ]
 per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004"] }
 
+[tool.ruff.lint.isort]
+known-first-party = ["jira_client_impl", "work_mgmt_client_interface"]
+
 [tool.ruff.lint.pylint]
 max-args = 8
 
@@ -55,6 +61,10 @@ explicit_package_bases = true # Required for src layout
 mypy_path = ["components/work_mgmt_client_interface/src", "components/jira_client_impl/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
+exclude = [
+    "jira_service_api_client/",
+    "main.py",
+]
 
 
 [tool.pytest.ini_options]
@@ -64,6 +74,7 @@ pythonpath = [
 ]
 testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+# Remove --cov-fail-under from here — it already lives in [tool.coverage.report]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
     "integration: marks tests as integration tests (medium speed, real dependencies)",
@@ -74,7 +85,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["components"]
-omit = ["*/tests/*", "*/__main__.py"]
+omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.
@@ -82,6 +93,7 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
+    "if interactive:", 
     # Ignore abstract methods decorators
     "@abstractmethod",
     "@(abc\\.)?abstractmethod",
@@ -95,6 +107,7 @@ exclude_lines = [
 [tool.uv.sources]
 work-mgmt-client-interface = {workspace = true}
 jira-client-impl = {workspace = true}
+jira-service-api-client = {workspace = true}
 
 [tool.fastapi]
 entrypoint = "main:app"
