@@ -79,7 +79,7 @@ def exchange_code_for_token(code: str) -> dict[str, Any]:
     try:
         response = requests.post(JIRA_TOKEN_URL, data=data, timeout=10)
         response.raise_for_status()
-        return response.json()
+        return response.json()  # type: ignore[no-any-return]
     except requests.RequestException as e:
         msg = "Failed to exchange authorization code for token"
         logger.exception(msg)
@@ -108,7 +108,7 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
     try:
         response = requests.post(JIRA_TOKEN_URL, data=data, timeout=10)
         response.raise_for_status()
-        return response.json()
+        return response.json()  # type: ignore[no-any-return]
     except requests.RequestException as e:
         msg = "Failed to refresh access token"
         logger.exception(msg)
@@ -132,7 +132,7 @@ def get_user_info(access_token: str) -> dict[str, Any]:
     try:
         response = requests.get(JIRA_API_URL, headers=headers, timeout=10)
         response.raise_for_status()
-        return response.json()
+        return response.json()  # type: ignore[no-any-return]
     except requests.RequestException as e:
         msg = "Failed to retrieve user information"
         logger.exception(msg)
@@ -208,4 +208,4 @@ def get_valid_token(user_id: str) -> str:
         new_token = refresh_access_token(session["refresh_token"])
         store_session(user_id, new_token)
 
-    return user_sessions[user_id]["access_token"]
+    return user_sessions[user_id]["access_token"]  # type: ignore[no-any-return]
