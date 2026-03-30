@@ -25,9 +25,13 @@ HTTP_OK = 200
 class AuthenticationError(Exception):
     """Raised when OAuth or authentication operations fail."""
 
+    pass
+
 
 class TokenRefreshError(Exception):
     """Raised when token refresh fails."""
+
+    pass
 
 
 # Storing in memory for now (suitable for development, needs database for production)
@@ -42,7 +46,6 @@ def get_authorize_url(state: str) -> str:
 
     Returns:
         Authorization URL for OAuth flow
-
     """
     params = {
         "client_id": JIRA_OAUTH_CLIENT_ID,
@@ -67,7 +70,6 @@ def exchange_code_for_token(code: str) -> dict[str, Any]:
 
     Raises:
         AuthenticationError: If token exchange fails
-
     """
     data: dict[str, Any] = {
         "grant_type": "authorization_code",
@@ -81,9 +83,8 @@ def exchange_code_for_token(code: str) -> dict[str, Any]:
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        msg = "Failed to exchange authorization code for token"
-        logger.exception(msg)
-        raise AuthenticationError(msg) from e
+        logger.error("Token exchange failed: %s", str(e))
+        raise AuthenticationError("Failed to exchange authorization code for token") from e
 
 
 def refresh_access_token(refresh_token: str) -> dict[str, Any]:
@@ -97,7 +98,6 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
 
     Raises:
         TokenRefreshError: If refresh fails
-
     """
     data: dict[str, Any] = {
         "grant_type": "refresh_token",
@@ -110,9 +110,8 @@ def refresh_access_token(refresh_token: str) -> dict[str, Any]:
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        msg = "Failed to refresh access token"
-        logger.exception(msg)
-        raise TokenRefreshError(msg) from e
+        logger.error("Token refresh failed: %s", str(e))
+        raise TokenRefreshError("Failed to refresh access token") from e
 
 
 def get_user_info(access_token: str) -> dict[str, Any]:
@@ -126,7 +125,6 @@ def get_user_info(access_token: str) -> dict[str, Any]:
 
     Raises:
         AuthenticationError: If user info retrieval fails
-
     """
     headers = {"Authorization": f"Bearer {access_token}"}
     try:
@@ -134,9 +132,8 @@ def get_user_info(access_token: str) -> dict[str, Any]:
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        msg = "Failed to retrieve user information"
-        logger.exception(msg)
-        raise AuthenticationError(msg) from e
+        logger.error("Failed to get user info: %s", str(e))
+        raise AuthenticationError("Failed to retrieve user information") from e
 
 
 def store_session(user_id: str, token_data: dict[str, Any]) -> None:
@@ -145,7 +142,6 @@ def store_session(user_id: str, token_data: dict[str, Any]) -> None:
     Args:
         user_id: Unique user identifier
         token_data: Token response data
-
     """
     user_sessions[user_id] = {
         "access_token": token_data.get("access_token"),
@@ -163,7 +159,6 @@ def get_session(user_id: str) -> dict[str, Any] | None:
 
     Returns:
         Session data or None if not found
-
     """
     return user_sessions.get(user_id)
 
@@ -176,7 +171,6 @@ def is_token_expired(user_id: str) -> bool:
 
     Returns:
         True if token is expired, False otherwise
-
     """
     session = get_session(user_id)
     if not session:
@@ -197,12 +191,10 @@ def get_valid_token(user_id: str) -> str:
     Raises:
         AuthenticationError: If user not authenticated
         TokenRefreshError: If token refresh fails
-
     """
     session = get_session(user_id)
     if not session:
-        msg = "User not authenticated"
-        raise AuthenticationError(msg) from None
+        raise AuthenticationError("User not authenticated")
 
     if is_token_expired(user_id):
         new_token = refresh_access_token(session["refresh_token"])
