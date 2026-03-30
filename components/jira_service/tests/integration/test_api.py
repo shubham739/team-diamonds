@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 import requests
 
@@ -21,12 +22,12 @@ def test_health() -> None:
     logger.info("=" * 70)
     try:
         response = requests.get(f"{BASE_URL}/health", timeout=5)
-        logger.info("Status Code: %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code: {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         logger.info("✓ PASSED\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_login_redirect() -> None:
@@ -36,18 +37,18 @@ def test_login_redirect() -> None:
     logger.info("=" * 70)
     try:
         response = requests.get(
-            f"{BASE_URL}/auth/login", allow_redirects=False, timeout=5,
+            f"{BASE_URL}/auth/login", allow_redirects=False, timeout=5
         )
-        logger.info("Status Code: %s", response.status_code)
+        logger.info(f"Status Code: {response.status_code}")
         if "location" in response.headers:
             redirect_url = response.headers["location"]
-            logger.info("Redirects to: %s...", redirect_url[:100])
+            logger.info(f"Redirects to: {redirect_url[:100]}...")
             assert "auth.atlassian.com" in redirect_url, "Should redirect to Atlassian"
             logger.info("✓ PASSED\n")
         else:
             logger.error("✗ FAILED: No location header\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_logout_requires_user_id() -> None:
@@ -58,13 +59,13 @@ def test_logout_requires_user_id() -> None:
     try:
         # Test without user_id
         response = requests.get(f"{BASE_URL}/auth/logout", timeout=5)
-        logger.info("Status Code (no user_id): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no user_id): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         # Should work with missing user_id (empty logout)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         logger.info("✓ PASSED\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_root_requires_auth() -> None:
@@ -75,12 +76,12 @@ def test_root_requires_auth() -> None:
     try:
         # Without token - should fail with 401 Unauthorized
         response = requests.get(f"{BASE_URL}/", timeout=5)
-        logger.info("Status Code (no token): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no token): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected without token)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_list_issues_requires_auth() -> None:
@@ -91,12 +92,12 @@ def test_list_issues_requires_auth() -> None:
     try:
         # Without token - should fail with 401 Unauthorized
         response = requests.get(f"{BASE_URL}/issues", timeout=5)
-        logger.info("Status Code (no token): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no token): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected without token)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_get_issue_requires_auth() -> None:
@@ -107,12 +108,12 @@ def test_get_issue_requires_auth() -> None:
     try:
         # Without token - should fail with 401 Unauthorized
         response = requests.get(f"{BASE_URL}/issues/TEST-123", timeout=5)
-        logger.info("Status Code (no token): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no token): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected without token)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_create_issue_requires_auth() -> None:
@@ -123,12 +124,12 @@ def test_create_issue_requires_auth() -> None:
     try:
         # Without token - should fail with 401 Unauthorized
         response = requests.post(f"{BASE_URL}/issues", timeout=5)
-        logger.info("Status Code (no token): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no token): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected without token)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_update_issue_requires_auth() -> None:
@@ -139,12 +140,12 @@ def test_update_issue_requires_auth() -> None:
     try:
         # Without token - should fail with 401 Unauthorized
         response = requests.put(f"{BASE_URL}/issues/TEST-123", timeout=5)
-        logger.info("Status Code (no token): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no token): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected without token)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_delete_issue_requires_auth() -> None:
@@ -155,12 +156,12 @@ def test_delete_issue_requires_auth() -> None:
     try:
         # Without token - should fail with 401 Unauthorized
         response = requests.delete(f"{BASE_URL}/issues/TEST-123", timeout=5)
-        logger.info("Status Code (no token): %s", response.status_code)
-        logger.info("Response: %s", json.dumps(response.json(), indent=2))
+        logger.info(f"Status Code (no token): {response.status_code}")
+        logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected without token)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_callback_requires_params() -> None:
@@ -171,12 +172,12 @@ def test_callback_requires_params() -> None:
     try:
         # Without code/state - should fail with validation error
         response = requests.get(f"{BASE_URL}/auth/callback", timeout=5)
-        logger.info("Status Code (no params): %s", response.status_code)
+        logger.info(f"Status Code (no params): {response.status_code}")
         # Returns HTML (422 with form) if missing params
         assert response.status_code in [200, 422], f"Expected 200/422, got {response.status_code}"
         logger.info("✓ PASSED (correctly rejected/handled invalid request)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_callback_with_invalid_state() -> None:
@@ -190,13 +191,13 @@ def test_callback_with_invalid_state() -> None:
             params={"code": "test_code", "state": "invalid_state"},
             timeout=5,
         )
-        logger.info("Status Code: %s", response.status_code)
+        logger.info(f"Status Code: {response.status_code}")
         if response.status_code == 400:
-            logger.info("Response: %s", json.dumps(response.json(), indent=2))
+            logger.info(f"Response: {json.dumps(response.json(), indent=2)}")
             assert "Invalid state" in response.json()["detail"]
         logger.info("✓ PASSED (correctly rejected invalid state)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_swagger_docs() -> None:
@@ -206,11 +207,11 @@ def test_swagger_docs() -> None:
     logger.info("=" * 70)
     try:
         response = requests.get(f"{BASE_URL}/docs", timeout=5)
-        logger.info("Status Code: %s", response.status_code)
+        logger.info(f"Status Code: {response.status_code}")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         logger.info("✓ PASSED (Swagger docs available at http://localhost:8000/docs)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def test_redoc() -> None:
@@ -220,18 +221,18 @@ def test_redoc() -> None:
     logger.info("=" * 70)
     try:
         response = requests.get(f"{BASE_URL}/redoc", timeout=5)
-        logger.info("Status Code: %s", response.status_code)
+        logger.info(f"Status Code: {response.status_code}")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         logger.info("✓ PASSED (ReDoc docs available at http://localhost:8000/redoc)\n")
-    except Exception:
-        logger.exception("✗ FAILED")
+    except Exception as e:
+        logger.error(f"✗ FAILED: {e}\n")
 
 
 def main() -> None:
     """Run all API tests."""
-    logger.info("%s", "\n" + "=" * 70)
+    logger.info("\n" + "=" * 70)
     logger.info("JIRA SERVICE API TEST SUITE")
-    logger.info("%s", "=" * 70 + "\n")
+    logger.info("=" * 70 + "\n")
 
     test_health()
     test_login_redirect()
