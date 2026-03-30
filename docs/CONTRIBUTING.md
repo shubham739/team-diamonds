@@ -141,3 +141,13 @@ Additional conventions:
 - Place integration and end-to-end tests in the `tests/` directory of the root folder. 
 - Place unit tests in the component's `tests/` 
 - Name test files `test_[module_name].py` to follow pytest conventions.
+
+# FastAPI Service
+
+## Setup
+```bash
+pip install -r requirements.txt
+make setup
+#if the app is not running
+uv add "uvicorn[standard]" --reinstall
+uvicorn main:app --reload
