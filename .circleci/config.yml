@@ -209,6 +209,39 @@ jobs:
             else
                echo "Coverage XML not found."
             fi
+  # Job 7: Deploy to AWS Lambda
+  deploy:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: "Install AWS CLI"
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+      - run:
+          name: "Package Lambda zip"
+          command: |
+            mkdir -p lambda_package
+            cp main.py handler.py auth.py jira_client_impl.py lambda_package/
+            pip install mangum -t lambda_package/
+            cd lambda_package && zip -r ../deployment.zip .
+      - run:
+          name: "Deploy to AWS Lambda"
+          command: |
+            aws lambda update-function-code \
+              --function-name team-diamonds-deployment \
+              --zip-file fileb://deployment.zip \
+              --region us-east-2
+      - run:
+          name: "Verify /health endpoint"
+          command: |
+            sleep 8
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_GATEWAY_URL/health)
+            [ "$STATUS" = "200" ] && echo "Health check passed!" || (echo "Health check failed: $STATUS" && exit 1)
 
 # Orchestrate jobs using workflows
 workflows:
@@ -311,3 +344,30 @@ workflows:
             branches:
               only:
                 - main
+
+  hw2_deploy:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only: hw2
+      - lint:
+          requires:
+            - build
+          filters:
+            branches:
+              only: hw2
+      - unit_test:
+          requires:
+            - build
+          filters:
+            branches:
+              only: hw2
+      - deploy:
+          requires:
+            - lint
+            - unit_test
+          context: aws-deploy
+          filters:
+            branches:
+              only: hw2
