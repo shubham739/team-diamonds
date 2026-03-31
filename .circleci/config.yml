@@ -249,6 +249,10 @@ jobs:
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
       - run:
+          name: "Debug pydantic in zip"
+          command: |
+            unzip -l deployment.zip | grep -E "pydantic"
+      - run:
           name: "Deploy to AWS Lambda"
           command: |
             aws lambda update-function-code \
