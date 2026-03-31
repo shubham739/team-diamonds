@@ -223,31 +223,35 @@ jobs:
             unzip awscliv2.zip
             sudo ./aws/install
       - run:
-          name: "Package Lambda zip"
+          name: "Package Lambda zip (clean)"
           command: |
-            source .venv/bin/activate
+            rm -rf lambda_package deployment.zip
+            mkdir lambda_package
 
-            mkdir -p lambda_package
-
-            # Copy application code
+            # Copy app code
             cp *.py lambda_package/
             cp -r components/jira_client_impl/src/jira_client_impl lambda_package/
             cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
 
-            # Copy dependencies from venv
-            cp -r .venv/lib/python3.12/site-packages/* lambda_package/
+            # Install ONLY runtime dependencies
+            pip install fastapi mangum python-dotenv requests \
+              --target lambda_package \
+              --no-cache-dir
 
-            # Clean unnecessary files
+            # Remove junk
             find lambda_package -name "__pycache__" -type d -exec rm -r {} +
             find lambda_package -name "*.pyc" -delete
 
-            # Zip everything
+            # Zip
             cd lambda_package
             zip -r ../deployment.zip .
             cd ..
 
+            echo "--- ZIP SIZE ---"
+            du -h deployment.zip
+
             echo "--- ZIP CONTENTS ---"
-            unzip -l deployment.zip | head -50
+            unzip -l deployment.zip | head -50 || true
       - run:
           name: "Deploy to AWS Lambda"
           command: |
