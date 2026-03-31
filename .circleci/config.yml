@@ -234,9 +234,14 @@ jobs:
             cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
 
             # Install ONLY runtime dependencies
-            pip install fastapi mangum python-dotenv requests \
+            pip install \
+              --platform manylinux2014_x86_64 \
               --target lambda_package \
-              --no-cache-dir
+              --implementation cp \
+              --python-version 3.12 \
+              --only-binary=:all: \
+              --upgrade \
+              fastapi mangum python-dotenv requests pydantic pydantic-core
 
             # Remove junk
             find lambda_package -name "__pycache__" -type d -exec rm -r {} +
