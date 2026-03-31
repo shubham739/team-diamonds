@@ -227,14 +227,15 @@ jobs:
           command: |
             mkdir -p lambda_package
             cp *.py lambda_package/
-            # Install PyPI dependencies
-            pip install mangum fastapi python-dotenv requests -t lambda_package/
-            # Install local packages — point pip at the src layout correctly
-            pip install components/jira_client_impl -t lambda_package/
+            # Install work_mgmt_client_interface FIRST since jira_client_impl depends on it
             pip install components/work_mgmt_client_interface -t lambda_package/
-            # Verify jira_client_impl is importable at root level
-            echo "--- checking jira_client_impl is present ---"
-            ls lambda_package/ | grep jira
+            # Now install jira_client_impl with no-deps to avoid pip looking on PyPI
+            pip install components/jira_client_impl --no-deps -t lambda_package/
+            # Install remaining PyPI dependencies
+            pip install mangum fastapi python-dotenv requests -t lambda_package/
+            # Verify both packages are present
+            echo "--- checking packages ---"
+            ls lambda_package/ | grep -E "jira|work_mgmt"
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
       - run:
