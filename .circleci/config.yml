@@ -327,6 +327,7 @@ workflows:
             branches:
               only:
                 - main # add other branches as needed
+                - HW-2
 
       - lint:
           requires:
@@ -335,6 +336,7 @@ workflows:
             branches:
               only:
                 - main
+                - HW-2
 
       - unit_test:
           requires:
@@ -343,6 +345,7 @@ workflows:
             branches:
               only:
                 - main
+                - HW-2
 
       - circleci_test:
           requires:
@@ -352,6 +355,7 @@ workflows:
             branches:
               only:
                 - main
+                - HW-2
 
       - integration_test:
           requires:
@@ -361,6 +365,7 @@ workflows:
             branches:
               only:
                 - main
+                - HW-2
                 
       - report_summary:
           requires:
@@ -371,6 +376,7 @@ workflows:
             branches:
               only:
                 - main
+                - HW-2
       - deploy:
           requires:
             - report_summary
