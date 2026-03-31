@@ -226,27 +226,38 @@ jobs:
           name: "Package Lambda zip"
           command: |
             source .venv/bin/activate
+
             mkdir -p lambda_package
+
+            # Copy application code
             cp *.py lambda_package/
-            # Copy source files DIRECTLY — bypass pip/uv install entirely
-            cp -r components/jira_client_impl/src/jira_client_impl \
-              lambda_package/jira_client_impl
-            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface \
-              lambda_package/work_mgmt_client_interface
-            # Only use uv for PyPI dependencies
-            uv pip install mangum fastapi python-dotenv requests \
-              -t lambda_package/
-            # Verify actual source files are present
-            echo "--- jira_client_impl contents ---"
-            ls lambda_package/jira_client_impl/
-            cd lambda_package && zip -r ../deployment.zip . && cd ..
-            ls -la deployment.zip
+            cp -r components/jira_client_impl/src/jira_client_impl lambda_package/
+            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
+
+            # Copy dependencies from venv
+            cp -r .venv/lib/python3.12/site-packages/* lambda_package/
+
+            # Clean unnecessary files
+            find lambda_package -name "__pycache__" -type d -exec rm -r {} +
+            find lambda_package -name "*.pyc" -delete
+
+            # Zip everything
+            cd lambda_package
+            zip -r ../deployment.zip .
+            cd ..
+
+            echo "--- ZIP CONTENTS ---"
+            unzip -l deployment.zip | head -50
       - run:
           name: "Deploy to AWS Lambda"
           command: |
             aws lambda update-function-code \
               --function-name team-diamonds-deployment \
               --zip-file fileb://deployment.zip \
+              --region us-east-2
+
+            aws lambda wait function-updated \
+              --function-name team-diamonds-deployment \
               --region us-east-2
       - run:
           name: "Verify /health endpoint" #attempt 3
