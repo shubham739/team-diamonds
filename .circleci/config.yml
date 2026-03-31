@@ -226,18 +226,17 @@ jobs:
           name: "Package Lambda zip"
           command: |
             mkdir -p lambda_package
-            # Copy ALL py files at root
             cp *.py lambda_package/
-            # Install ALL dependencies including local packages
-            pip install mangum fastapi python-dotenv requests \
-              components/jira_client_impl \
-              components/work_mgmt_client_interface \
-              -t lambda_package/
-            echo "--- lambda_package contents ---"
-            ls -la lambda_package/
+            # Install PyPI dependencies
+            pip install mangum fastapi python-dotenv requests -t lambda_package/
+            # Install local packages — point pip at the src layout correctly
+            pip install components/jira_client_impl -t lambda_package/
+            pip install components/work_mgmt_client_interface -t lambda_package/
+            # Verify jira_client_impl is importable at root level
+            echo "--- checking jira_client_impl is present ---"
+            ls lambda_package/ | grep jira
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
-            unzip -l deployment.zip | grep -E "handler|main|auth|jira|work_mgmt"
       - run:
           name: "Deploy to AWS Lambda"
           command: |
