@@ -231,40 +231,41 @@ jobs:
             rm -rf lambda_package deployment.zip
             mkdir lambda_package
 
-            # 1. Export ONLY external dependencies (excluding workspace members)
-            # This ensures we get the Linux-compatible binaries for Pydantic/FastAPI
+            # 1. Export dependencies (No workspace members)
             uv export --format requirements-txt --no-dev --no-emit-workspace -o prod-requirements.txt
 
-            # 2. Install external binaries to the package
+            # 2. Install binaries for x86_64
             pip install \
               --target lambda_package \
               --platform manylinux2014_x86_64 \
               --implementation cp \
               --python-version 3.12 \
               --only-binary=:all: \
+              --upgrade \
               -r prod-requirements.txt
 
-            # 3. Copy application code (Root files)
-            cp *.py lambda_package/
+            # 3. Copy application code
+            cp main.py handler.py auth.py lambda_package/ 2>/dev/null || cp *.py lambda_package/
 
-            # 4. Copy Workspace Members (Manual sync to maintain pathing)
-            # We copy the actual source code into the package root
+            # 4. Copy Workspace Members
             cp -r components/jira_client_impl/src/jira_client_impl lambda_package/
             cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
-            cp -r jira_service_api_client/src/jira_service_api_client lambda_package/ 2>/dev/null || cp -r jira_service_api_client/* lambda_package/jira_service_api_client/ 2>/dev/null || true
+            cp -r jira_service_api_client/src/jira_service_api_client lambda_package/ 2>/dev/null || true
 
-            # 5. Final Cleanup & Zip
+            # 5. Fix the .venv issue for Lambda
+            # This creates a dummy .env in the root so your main.py doesn't crash
+            touch lambda_package/.env
+
+            # 6. Cleanup and Zip
             find lambda_package -name "__pycache__" -type d -exec rm -r {} +
             cd lambda_package && zip -r ../deployment.zip .
       - run:
           name: "Deploy to AWS Lambda"
+          context: jira-client # Ensure this context exists with your AWS keys!
           command: |
             aws lambda update-function-code \
               --function-name team-diamonds-deployment \
               --zip-file fileb://deployment.zip \
-              --region us-east-2
-            aws lambda wait function-updated \
-              --function-name team-diamonds-deployment \
               --region us-east-2
       - run:
           name: "Verify /health endpoint"
