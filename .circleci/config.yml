@@ -242,13 +242,6 @@ jobs:
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
       - run:
-          name: "Debug zip contents"
-          command: |
-            echo "--- All jira related files in zip ---"
-            unzip -l deployment.zip | grep -i jira
-            echo "--- Any egg-link or pth files ---"
-            unzip -l deployment.zip | grep -E "egg-link|\.pth|direct_url"
-      - run:
           name: "Deploy to AWS Lambda"
           command: |
             aws lambda update-function-code \
