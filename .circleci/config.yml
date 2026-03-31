@@ -226,7 +226,7 @@ jobs:
           name: "Package Lambda zip"
           command: |
             mkdir -p lambda_package
-            cp main.py handler.py auth.py jira_client_impl.py lambda_package/
+            cp main.py lambda_package/
             pip install mangum -t lambda_package/
             cd lambda_package && zip -r ../deployment.zip .
       - run:
