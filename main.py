@@ -248,6 +248,13 @@ def delete_issue(issue_id: str, token: str = Depends(oauth2_scheme)) -> dict:
 
 
 
+#This file is for development purposes only
+
+import logging
+
+from jira_client_impl import get_client
+
+
 def main():
     print("Hello from team-diamonds!")
     client = get_client(interactive=True)

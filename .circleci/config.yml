@@ -209,6 +209,66 @@ jobs:
             else
                echo "Coverage XML not found."
             fi
+  # Job 7: Deploy to AWS Lambda
+  deploy:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: "Install AWS CLI"
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+      - run:
+          name: "Package Lambda zip (clean)"
+          command: |
+            rm -rf lambda_package deployment.zip
+            mkdir lambda_package
+
+            # Copy app code
+            cp *.py lambda_package/
+            cp -r components/jira_client_impl/src/jira_client_impl lambda_package/
+            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
+
+            # Install ONLY runtime dependencies
+            pip install fastapi mangum python-dotenv requests \
+              --target lambda_package \
+              --no-cache-dir
+
+            # Remove junk
+            find lambda_package -name "__pycache__" -type d -exec rm -r {} +
+            find lambda_package -name "*.pyc" -delete
+
+            # Zip
+            cd lambda_package
+            zip -r ../deployment.zip .
+            cd ..
+
+            echo "--- ZIP SIZE ---"
+            du -h deployment.zip
+
+            echo "--- ZIP CONTENTS ---"
+            unzip -l deployment.zip | head -50 || true
+      - run:
+          name: "Deploy to AWS Lambda"
+          command: |
+            aws lambda update-function-code \
+              --function-name team-diamonds-deployment \
+              --zip-file fileb://deployment.zip \
+              --region us-east-2
+
+            aws lambda wait function-updated \
+              --function-name team-diamonds-deployment \
+              --region us-east-2
+      - run:
+          name: "Verify /health endpoint" #attempt 3
+          command: |
+            sleep 8
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_GATEWAY_URL/health)
+            [ "$STATUS" = "200" ] && echo "Health check passed!" || (echo "Health check failed: $STATUS" && exit 1)
 
 # Orchestrate jobs using workflows
 workflows:
