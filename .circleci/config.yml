@@ -155,7 +155,26 @@ jobs:
       - store_artifacts:
           path: test-results/integration
 
-  # Job 6: Report Summary
+  # Job 6: Deploy to Render (runs on hw2 branch and main)
+  deploy:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: "Trigger Render deploy hook"
+          command: |
+            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+              echo "RENDER_DEPLOY_HOOK_URL not set — skipping deploy"
+              exit 0
+            fi
+            curl -fsSL "$RENDER_DEPLOY_HOOK_URL" \
+              -X POST \
+              -H "Accept: application/json" \
+              --output /dev/null \
+              --write-out "HTTP %{http_code}\n"
+
+  # Job 7: Report Summary
   report_summary:
     docker:
       - image: cimg/base:stable # Use a basic image for reporting
@@ -247,6 +266,15 @@ workflows:
               ignore:
                 - main
                 - develop
+
+      - deploy:
+          requires:
+            - circleci_test
+          context: render-deploy
+          filters:
+            branches:
+              only:
+                - hw2
 
       # Optional: Report summary after core tests
       - report_summary:

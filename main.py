@@ -1,10 +1,15 @@
 """FastAPI server with Jira OAuth2 authentication and work management endpoints."""
 
+import sys
 import os
 import secrets
 from dotenv import load_dotenv
 
+# Add jira_service to sys.path so auth and exceptions can be imported
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "components", "jira_service", "src", "jira_service"))
+
 # loading .env from inside .venv
+
 venv_env_path = os.path.join(os.path.dirname(__file__), ".venv", ".env")
 load_dotenv(venv_env_path)
 from jira_client_impl import get_client

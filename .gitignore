@@ -122,6 +122,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# OpenAPI generated
-jira_service_api_client/
+# macOS metadata (belt-and-suspenders)
+**/.DS_Store
+
+# OpenAPI generated artifacts
 openapi.json

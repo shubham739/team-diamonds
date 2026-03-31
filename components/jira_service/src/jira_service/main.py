@@ -145,7 +145,7 @@ def callback(
 
 
 @app.get("/auth/logout")
-def logout(user_id: Annotated[str | None, Query(None)] = None) -> dict[str, str]:
+def logout(user_id: Annotated[str | None, Query()] = None) -> dict[str, str]:
     """Clear user session and log out.
 
     Args:
@@ -240,12 +240,12 @@ def get_issue(
 def list_issues(
     _token: Annotated[str, Depends(oauth2_scheme)],
     client: Annotated[Any, Depends(get_jira_client)],  # noqa: ANN401
-    title: Annotated[str | None, Query(None)] = None,
-    description: Annotated[str | None, Query(None)] = None,
-    status: Annotated[Status | None, Query(None)] = None,
-    assignee: Annotated[str | None, Query(None)] = None,
-    due_date: Annotated[str | None, Query(None)] = None,
-    max_results: Annotated[int, Query(20, ge=1, le=100)] = 20,
+    title: Annotated[str | None, Query()] = None,
+    description: Annotated[str | None, Query()] = None,
+    status: Annotated[Status | None, Query()] = None,
+    assignee: Annotated[str | None, Query()] = None,
+    due_date: Annotated[str | None, Query()] = None,
+    max_results: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict:
     """List issues with optional filters.
 
@@ -297,11 +297,11 @@ def list_issues(
 def create_issue(
     _token: Annotated[str, Depends(oauth2_scheme)],
     client: Annotated[Any, Depends(get_jira_client)],  # noqa: ANN401
-    title: Annotated[str | None, Query(None)] = None,
-    description: Annotated[str | None, Query(None)] = None,
-    status: Annotated[Status | None, Query(None)] = None,
-    assignee: Annotated[str | None, Query(None)] = None,
-    due_date: Annotated[str | None, Query(None)] = None,
+    title: Annotated[str | None, Query()] = None,
+    description: Annotated[str | None, Query()] = None,
+    status: Annotated[Status | None, Query()] = None,
+    assignee: Annotated[str | None, Query()] = None,
+    due_date: Annotated[str | None, Query()] = None,
 ) -> dict:
     """Create a new issue.
 
@@ -350,11 +350,11 @@ def update_issue(
     issue_id: str,
     _token: Annotated[str, Depends(oauth2_scheme)],
     client: Annotated[Any, Depends(get_jira_client)],  # noqa: ANN401
-    title: Annotated[str | None, Query(None)] = None,
-    description: Annotated[str | None, Query(None)] = None,
-    status: Annotated[Status | None, Query(None)] = None,
-    assignee: Annotated[str | None, Query(None)] = None,
-    due_date: Annotated[str | None, Query(None)] = None,
+    title: Annotated[str | None, Query()] = None,
+    description: Annotated[str | None, Query()] = None,
+    status: Annotated[Status | None, Query()] = None,
+    assignee: Annotated[str | None, Query()] = None,
+    due_date: Annotated[str | None, Query()] = None,
 ) -> dict:
     """Update an existing issue.
 

@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: jira-service
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: JIRA_OAUTH_CLIENT_ID
+        sync: false
+      - key: JIRA_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: JIRA_OAUTH_REDIRECT_URI
+        sync: false
+      - key: JIRA_BASE_URL
+        sync: false
+      - key: JIRA_USER_EMAIL
+        sync: false
+      - key: JIRA_API_TOKEN
+        sync: false
