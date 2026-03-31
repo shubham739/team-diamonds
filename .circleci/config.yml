@@ -371,3 +371,11 @@ workflows:
             branches:
               only:
                 - main
+      - deploy:
+          requires:
+            - report_summary
+          filters:
+            branches:
+              only: 
+                - HW-2
+                - main
