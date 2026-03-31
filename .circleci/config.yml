@@ -237,7 +237,7 @@ jobs:
               --zip-file fileb://deployment.zip \
               --region us-east-2
       - run:
-          name: "Verify /health endpoint"
+          name: "Verify /health endpoint" #trying new change
           command: |
             sleep 8
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_GATEWAY_URL/health)
