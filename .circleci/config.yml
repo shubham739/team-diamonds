@@ -226,11 +226,14 @@ jobs:
           name: "Package Lambda zip"
           command: |
             mkdir -p lambda_package
-            cp -r *.py lambda_package/
-            cp -r work_mgmt_client_interface/ lambda_package/
-            pip install mangum fastapi python-dotenv requests -t lambda_package/
+            cp main.py handler.py lambda_package/
+            [ -f auth.py ] && cp auth.py lambda_package/
+            pip install mangum fastapi python-dotenv requests \
+              components/jira_client_impl \
+              components/work_mgmt_client_interface \
+              -t lambda_package/
             cd lambda_package && zip -r ../deployment.zip .
-            unzip -l deployment.zip | grep handler
+            unzip -l deployment.zip | grep -E "handler|main|jira_client|work_mgmt"
       - run:
           name: "Deploy to AWS Lambda"
           command: |
