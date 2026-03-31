@@ -225,21 +225,22 @@ jobs:
       - run:
           name: "Package Lambda zip"
           command: |
-            source .venv/bin/activate
             mkdir -p lambda_package
             cp *.py lambda_package/
-            # Use uv to export all dependencies to requirements.txt
-            uv export --no-dev --format requirements-txt > requirements.txt
-            # Install from requirements.txt into lambda_package
-            uv pip install -r requirements.txt \
-              --find-links components/work_mgmt_client_interface \
-              --find-links components/jira_client_impl \
+            # Build wheels first to avoid editable installs
+            pip wheel components/work_mgmt_client_interface \
+              --no-build-isolation -w wheels/
+            pip wheel components/jira_client_impl \
+              --no-deps --no-build-isolation -w wheels/
+            # Install everything from wheels (guaranteed flat files)
+            pip install wheels/*.whl \
+              mangum fastapi python-dotenv requests \
               -t lambda_package/
-            # Verify packages are present
-            echo "--- checking packages ---"
-            ls lambda_package/ | grep -E "jira|work_mgmt|mangum|fastapi"
+            # Verify actual .py files are present, not egg-links
+            echo "--- jira files in package ---"
+            unzip -l deployment.zip 2>/dev/null | grep jira || \
+              find lambda_package/ -path "*jira*" -name "*.py"
             cd lambda_package && zip -r ../deployment.zip . && cd ..
-            ls -la deployment.zip
       - run:
           name: "Deploy to AWS Lambda"
           command: |
