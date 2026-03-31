@@ -1,7 +1,4 @@
-"""
-Adds mangum support for lambda deployment
-
-"""
+"""Adds mangum support for lambda deployment."""
 
 from mangum import Mangum
 
