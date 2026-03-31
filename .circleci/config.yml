@@ -209,7 +209,7 @@ jobs:
             else
                echo "Coverage XML not found."
             fi
-  # Job 7: Deploy to AWS Lambda
+# Job 7: Deploy to AWS Lambda
   deploy:
     docker:
       - image: cimg/python:3.12
@@ -217,46 +217,45 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: "Install AWS CLI"
+          name: "Install AWS CLI & uv"
           command: |
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
+            unzip -q awscliv2.zip
             sudo ./aws/install
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
       - run:
-          name: "Package Lambda zip (clean)"
+          name: "Package Lambda Workspace"
           command: |
+            source $BASH_ENV
             rm -rf lambda_package deployment.zip
             mkdir lambda_package
 
-            # Copy app code
-            cp *.py lambda_package/
-            cp -r components/jira_client_impl/src/jira_client_impl lambda_package/
-            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
+            # 1. Export ONLY external dependencies (excluding workspace members)
+            # This ensures we get the Linux-compatible binaries for Pydantic/FastAPI
+            uv export --format requirements-txt --no-dev --no-emit-workspace -o prod-requirements.txt
 
-            # Install ONLY runtime dependencies
+            # 2. Install external binaries to the package
             pip install \
-              --platform manylinux2014_x86_64 \
               --target lambda_package \
+              --platform manylinux2014_x86_64 \
               --implementation cp \
               --python-version 3.12 \
               --only-binary=:all: \
-              --upgrade \
-              fastapi mangum python-dotenv requests pydantic pydantic-core
+              -r prod-requirements.txt
 
-            # Remove junk
+            # 3. Copy application code (Root files)
+            cp *.py lambda_package/
+
+            # 4. Copy Workspace Members (Manual sync to maintain pathing)
+            # We copy the actual source code into the package root
+            cp -r components/jira_client_impl/src/jira_client_impl lambda_package/
+            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface lambda_package/
+            cp -r jira_service_api_client/src/jira_service_api_client lambda_package/ 2>/dev/null || cp -r jira_service_api_client/* lambda_package/jira_service_api_client/ 2>/dev/null || true
+
+            # 5. Final Cleanup & Zip
             find lambda_package -name "__pycache__" -type d -exec rm -r {} +
-            find lambda_package -name "*.pyc" -delete
-
-            # Zip
-            cd lambda_package
-            zip -r ../deployment.zip .
-            cd ..
-
-            echo "--- ZIP SIZE ---"
-            du -h deployment.zip
-
-            echo "--- ZIP CONTENTS ---"
-            unzip -l deployment.zip | head -50 || true
+            cd lambda_package && zip -r ../deployment.zip .
       - run:
           name: "Deploy to AWS Lambda"
           command: |
@@ -264,14 +263,12 @@ jobs:
               --function-name team-diamonds-deployment \
               --zip-file fileb://deployment.zip \
               --region us-east-2
-
             aws lambda wait function-updated \
               --function-name team-diamonds-deployment \
               --region us-east-2
       - run:
-          name: "Verify /health endpoint" #attempt 3
+          name: "Verify /health endpoint"
           command: |
-            sleep 8
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_GATEWAY_URL/health)
             [ "$STATUS" = "200" ] && echo "Health check passed!" || (echo "Health check failed: $STATUS" && exit 1)
 
@@ -385,6 +382,7 @@ workflows:
       - deploy:
           requires:
             - report_summary
+          context: jira-client
           filters:
             branches:
               only: 
