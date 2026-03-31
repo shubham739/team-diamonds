@@ -226,25 +226,28 @@ jobs:
           name: "Package Lambda zip"
           command: |
             source .venv/bin/activate
-            mkdir -p lambda_package wheels/
+            mkdir -p lambda_package
             cp *.py lambda_package/
-            # Build wheels using uv (knows about hatchling from your venv)
-            uv build components/work_mgmt_client_interface --wheel --out-dir wheels/
-            uv build components/jira_client_impl --wheel --out-dir wheels/
-            # Install all wheels + dependencies flat into lambda_package
-            uv pip install wheels/*.whl \
-              mangum fastapi python-dotenv requests \
-              --no-deps \
+            # Copy source files DIRECTLY — bypass pip/uv install entirely
+            cp -r components/jira_client_impl/src/jira_client_impl \
+              lambda_package/jira_client_impl
+            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface \
+              lambda_package/work_mgmt_client_interface
+            # Only use uv for PyPI dependencies
+            uv pip install mangum fastapi python-dotenv requests \
               -t lambda_package/
-            # Install transitive deps separately
-            uv pip install -r <(uv export --no-dev --format requirements-txt) \
-              --find-links wheels/ \
-              -t lambda_package/
-            # Verify
-            echo "--- checking jira files ---"
-            find lambda_package/ -path "*jira*" -name "*.py" | head -10
+            # Verify actual source files are present
+            echo "--- jira_client_impl contents ---"
+            ls lambda_package/jira_client_impl/
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
+      - run:
+          name: "Debug zip contents"
+          command: |
+            echo "--- All jira related files in zip ---"
+            unzip -l deployment.zip | grep -i jira
+            echo "--- Any egg-link or pth files ---"
+            unzip -l deployment.zip | grep -E "egg-link|\.pth|direct_url"
       - run:
           name: "Deploy to AWS Lambda"
           command: |
