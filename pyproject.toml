@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Template Repositiory for an Issue Tracker client"
 requires-python = ">=3.12"
 dependencies = [
+    "mangum",
+    "fastapi",
     "work-mgmt-client-interface",
     "jira-client-impl",
     "jira-service",
