@@ -55,6 +55,7 @@ def _make_response(status_code: int, json_body: Any = None, *, text: str = "") -
     """Build a minimal httpx.Response for testing _raise_for_status."""
     if json_body is not None:
         import json
+
         content = json.dumps(json_body).encode()
         headers = {"content-type": "application/json"}
     else:

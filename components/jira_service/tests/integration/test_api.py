@@ -53,8 +53,10 @@ def _make_mock_issue(
 
 def _mock_client_dep(mock_client: MagicMock) -> Any:
     """Return a FastAPI dependency override that injects *mock_client*."""
+
     def _dep() -> MagicMock:
         return mock_client
+
     return _dep
 
 
@@ -129,6 +131,7 @@ class TestAuthCallback:
 
     def test_valid_callback_returns_user_info(self, api_client: TestClient) -> None:
         from jira_service.main import auth_states
+
         auth_states["valid_state"] = "valid_state"
 
         with (
@@ -162,6 +165,7 @@ class TestAuthLogout:
 
     def test_logout_clears_session(self, api_client: TestClient) -> None:
         from jira_service.auth import user_sessions
+
         user_sessions["uid-to-logout"] = {"access_token": "tok"}
         response = api_client.get("/auth/logout", params={"user_id": "uid-to-logout"})
         assert response.status_code == 200
@@ -201,10 +205,12 @@ class TestListIssues:
         assert response.status_code == 401
 
     def test_returns_issues_list(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
-        mock_jira_client.get_issues.return_value = iter([
-            _make_mock_issue("TD-1"),
-            _make_mock_issue("TD-2"),
-        ])
+        mock_jira_client.get_issues.return_value = iter(
+            [
+                _make_mock_issue("TD-1"),
+                _make_mock_issue("TD-2"),
+            ],
+        )
         response = api_client.get("/issues", headers=_AUTH_HEADER)
         assert response.status_code == 200
         body = response.json()

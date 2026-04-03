@@ -37,13 +37,11 @@ MAIN_SCRIPT = Path(__file__).parent.parent.parent / "components" / "jira_service
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def client() -> JiraClient:
     """Return a live, authenticated JiraClient, or skip if credentials are absent."""
-    missing = [
-        var for var in ("JIRA_BASE_URL", "JIRA_USER_EMAIL", "JIRA_API_TOKEN")
-        if not os.environ.get(var)
-    ]
+    missing = [var for var in ("JIRA_BASE_URL", "JIRA_USER_EMAIL", "JIRA_API_TOKEN") if not os.environ.get(var)]
     if missing:
         pytest.skip(f"Missing env vars: {missing}")
     return get_client(interactive=False)
@@ -64,6 +62,7 @@ def created_issue(client: JiraClient) -> Generator[Issue, None, None]:
 # ---------------------------------------------------------------------------
 # 1.  main.py structural checks (no credentials needed)
 # ---------------------------------------------------------------------------
+
 
 class TestMainScriptStructure:
     """Verify main.py exists and is syntactically valid before running anything live."""
@@ -93,14 +92,17 @@ class TestMainScriptStructure:
         if not MAIN_SCRIPT.exists():
             pytest.skip("main.py not found.")
         root = Path(__file__).parent.parent.parent
-        pythonpath = os.pathsep.join([
-            str(root / "components" / "jira_client_impl" / "src"),
-            str(root / "components" / "work_mgmt_client_interface" / "src"),
-        ])
+        pythonpath = os.pathsep.join(
+            [
+                str(root / "components" / "jira_client_impl" / "src"),
+                str(root / "components" / "work_mgmt_client_interface" / "src"),
+            ],
+        )
         env = {**os.environ, "PYTHONPATH": pythonpath}
         result = subprocess.run(  # noqa: S603
             [
-                sys.executable, "-c",
+                sys.executable,
+                "-c",
                 "import jira_client_impl; from jira_client_impl.jira_impl import get_client; print('ok')",
             ],
             capture_output=True,
@@ -113,9 +115,11 @@ class TestMainScriptStructure:
         assert result.returncode == 0, f"Import error:\n{result.stderr}"
         assert "ok" in result.stdout
 
+
 # ---------------------------------------------------------------------------
 # 2.  Application structure integrity
 # ---------------------------------------------------------------------------
+
 
 class TestApplicationStructure:
     """Verify required files exist at expected paths."""
