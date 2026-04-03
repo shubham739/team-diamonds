@@ -28,7 +28,7 @@ class IssueData:
     due_date: str | None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "IssueData":
+    def from_dict(cls, data: dict[str, Any]) -> IssueData:
         """Construct an IssueData from a raw API response dict."""
         return cls(
             id=str(data["id"]),

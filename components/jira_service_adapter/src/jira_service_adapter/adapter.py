@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
+from jira_service_adapter.issue import ServiceIssue
 from jira_service_api_client.client import JiraServiceClient, ServiceIssueNotFoundError
 from jira_service_api_client.models import Status as ServiceStatus
 from work_mgmt_client_interface.client import IssueNotFoundError, IssueTrackerClient
-from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
-from jira_service_adapter.issue import ServiceIssue
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
 
 def _to_service_status(status: Status) -> ServiceStatus:

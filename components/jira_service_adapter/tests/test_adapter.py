@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from jira_service_adapter.adapter import JiraServiceAdapter, get_client
+from jira_service_adapter.issue import ServiceIssue
 from jira_service_api_client.client import ServiceIssueNotFoundError
 from jira_service_api_client.models import IssueData
 from jira_service_api_client.models import Status as ServiceStatus
-from jira_service_adapter.adapter import JiraServiceAdapter, get_client
-from jira_service_adapter.issue import ServiceIssue
 from work_mgmt_client_interface.client import IssueNotFoundError
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
@@ -41,13 +41,13 @@ def _make_data(
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_http() -> MagicMock:
     """Return a mock JiraServiceClient."""
     return MagicMock()
 
 
-@pytest.fixture()
+@pytest.fixture
 def adapter(mock_http: MagicMock) -> JiraServiceAdapter:
     """Return an adapter wired to the mock HTTP client."""
     return JiraServiceAdapter(mock_http)

@@ -4,12 +4,17 @@ Authentication
 --------------
 The client supports two credential modes:
 
-1. When get_client(interactive = True)
-    User is prompted for the three values above at runtime if any are missing from the environment.
-2. When get_client(interactive = False) - Default
+1. API Token (Basic Auth) — get_client(interactive=False) or get_client(interactive=True)
         JIRA_BASE_URL   https://myorg.atlassian.net
         JIRA_USER_EMAIL me@example.com
         JIRA_API_TOKEN  <token from https://id.atlassian.com/manage-profile/security/api-tokens>
+
+2. OAuth2 Bearer Token — get_oauth_client(access_token)
+        JIRA_CLOUD_ID   <cloud ID from https://api.atlassian.com/oauth/token/accessible-resources>
+        access_token    Atlassian OAuth2 access token (passed at call-time, NOT read from env)
+
+   When using OAuth2, the Atlassian REST API base URL changes to:
+        https://api.atlassian.com/ex/jira/{cloud_id}
 
 Dependencies:
     uv add requests
@@ -114,13 +119,35 @@ class JiraClient(IssueTrackerClient):
 
     _API_PREFIX = "/rest/api/3"
 
-    def __init__(self, base_url: str, user_email: str, api_token: str) -> None:
-        """Initialize Jira Client."""
+    def __init__(
+        self,
+        base_url: str,
+        user_email: str = "",
+        api_token: str = "",
+        *,
+        access_token: str = "",
+    ) -> None:
+        """Initialize Jira Client.
+
+        Either (user_email + api_token) for Basic Auth, or access_token for OAuth2 Bearer.
+        OAuth2 mode is used when the service receives a per-user Atlassian token from the
+        Authorization Code flow; in that case base_url should be the Atlassian API base
+        (https://api.atlassian.com/ex/jira/{cloud_id}).
+        """
         self._base_url = base_url.rstrip("/")
-        self._auth = HTTPBasicAuth(user_email, api_token)
         self._session = requests.Session()
-        self._session.auth = self._auth
-        self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
+        if access_token:
+            # OAuth2 bearer token mode — used by the FastAPI service per-user path
+            self._session.headers.update({
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            })
+        else:
+            # API token / Basic Auth mode — used by the local library path
+            self._auth = HTTPBasicAuth(user_email, api_token)
+            self._session.auth = self._auth
+            self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
 
     # ------------------------------------------------------------------
     # Internal HTTP helpers
@@ -495,3 +522,35 @@ def get_client(*, interactive: bool = False) -> JiraClient:
             raise OSError(msg)
 
     return JiraClient(base_url, user_email, api_token)
+
+
+def get_oauth_client(access_token: str) -> JiraClient:
+    """Return a JiraClient configured for OAuth2 Bearer token authentication.
+
+    This is the correct factory to use inside the FastAPI service when the caller
+    has already completed the OAuth2 Authorization Code flow and holds a per-user
+    Atlassian access token.
+
+    The Atlassian REST API for OAuth2 apps uses a different base URL:
+        https://api.atlassian.com/ex/jira/{cloud_id}
+
+    Environment variables:
+        JIRA_CLOUD_ID: The cloud ID from
+            https://api.atlassian.com/oauth/token/accessible-resources
+
+    Args:
+        access_token: A valid Atlassian OAuth2 access token.
+
+    Raises:
+        OSError: If JIRA_CLOUD_ID environment variable is not set.
+
+    """
+    cloud_id = os.environ.get("JIRA_CLOUD_ID", "")
+    if not cloud_id:
+        msg = (
+            "Missing required environment variable: JIRA_CLOUD_ID. "
+            "Set it to the cloud ID from https://api.atlassian.com/oauth/token/accessible-resources"
+        )
+        raise OSError(msg)
+    base_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+    return JiraClient(base_url, access_token=access_token)

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from jira_service_api_client.models import IssueData
-from jira_service_api_client.models import Status as ServiceStatus
+from typing import TYPE_CHECKING
+
 from work_mgmt_client_interface.issue import Issue, Status
+
+if TYPE_CHECKING:
+    from jira_service_api_client.models import IssueData
+    from jira_service_api_client.models import Status as ServiceStatus
 
 
 def _map_status(service_status: ServiceStatus) -> Status:

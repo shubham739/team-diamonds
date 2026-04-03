@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
@@ -151,7 +151,7 @@ class JiraServiceClient:
         response = self._http.delete(f"/issues/{issue_id}")
         self._raise_for_status(response, issue_id=issue_id)
 
-    def __enter__(self) -> "JiraServiceClient":
+    def __enter__(self) -> Self:
         """Support use as a context manager."""
         return self
 
