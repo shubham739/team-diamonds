@@ -12,7 +12,7 @@ request/response shapes, error mapping) rather than on the Jira client logic
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,7 +78,7 @@ def mock_jira_client() -> MagicMock:
 
 
 @pytest.fixture
-def api_client(mock_jira_client: MagicMock) -> TestClient:
+def api_client(mock_jira_client: MagicMock) -> Generator[TestClient, None, None]:
     """TestClient with the Jira client dependency overridden."""
     app.dependency_overrides[get_jira_client] = _mock_client_dep(mock_jira_client)
     client = TestClient(app, raise_server_exceptions=False)

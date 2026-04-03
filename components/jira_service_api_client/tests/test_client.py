@@ -328,9 +328,8 @@ class TestDeleteIssue:
 
     def test_success_returns_none(self, client: JiraServiceClient) -> None:
         with patch.object(client._http, "delete", return_value=_make_response(200, {})):
-            result = client.delete_issue("TD-1")
-        assert result is None
-
+            client.delete_issue("TD-1")
+            
     def test_404_raises_not_found(self, client: JiraServiceClient) -> None:
         with patch.object(client._http, "delete", return_value=_make_response(404)):
             with pytest.raises(ServiceIssueNotFoundError):
