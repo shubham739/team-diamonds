@@ -681,6 +681,18 @@ wheels = [
 ]
 
 [[package]]
+name = "mangum"
+version = "0.21.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/89/cb/d9f4d685a0b8eceac10991e15ac471d9568e4e42c2489ae9bf072828c1c2/mangum-0.21.0.tar.gz", hash = "sha256:e31ed72d67f9958fa4379f65df77729906dec6dfa00afa6ed4e06c77833000de", size = 89130, upload-time = "2026-02-01T17:17:42.816Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/50/e3c694b8e122551e4557450219283771334dee2ed5734a8398c8b8018c50/mangum-0.21.0-py3-none-any.whl", hash = "sha256:309e48f5c629542516c5106ecf079f4ec08809ed50df882238d98fe1392820c7", size = 17146, upload-time = "2026-02-01T17:17:41.553Z" },
+]
+
+[[package]]
 name = "markdown"
 version = "3.10.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1473,6 +1485,7 @@ dependencies = [
     { name = "jira-service" },
     { name = "jira-service-adapter" },
     { name = "jira-service-api-client" },
+    { name = "mangum" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1495,12 +1508,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "jira-client-impl", editable = "components/jira_client_impl" },
     { name = "jira-service", editable = "components/jira_service" },
     { name = "jira-service-adapter", editable = "components/jira_service_adapter" },
     { name = "jira-service-api-client", editable = "components/jira_service_api_client" },
+    { name = "mangum" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.6.1" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.6.15" },
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=1.16.12" },
