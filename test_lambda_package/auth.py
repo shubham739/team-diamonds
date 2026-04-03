@@ -16,7 +16,7 @@ JIRA_OAUTH_REDIRECT_URI = os.getenv("JIRA_OAUTH_REDIRECT_URI", "http://localhost
 
 # Jira OAuth Endpoints
 JIRA_AUTH_URL = "https://auth.atlassian.com/authorize"
-JIRA_TOKEN_URL = "https://auth.atlassian.com/oauth/token"  # noqa: S105
+JIRA_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
 JIRA_API_URL = "https://api.atlassian.com/me"
 
 # HTTP status code constant

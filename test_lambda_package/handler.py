@@ -1,7 +1,6 @@
 """Adds mangum support for lambda deployment."""
 
-from mangum import Mangum
-
 from main import app
+from mangum import Mangum
 
 handler = Mangum(app, lifespan="off")

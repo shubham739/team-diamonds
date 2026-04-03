@@ -51,7 +51,7 @@ class JiraBoard(Board):
 
         Returns Issue objects (your JiraIssue adapter) by reusing JiraClient.build_issue().
         """
-        data = self._client._get(  # noqa: SLF001
+        data = self._client._get(
             f"/board/{self._board_id}/issue",
             params={"fields": "summary,description,status,assignee,duedate"},
         )
