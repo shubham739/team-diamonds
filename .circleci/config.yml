@@ -162,20 +162,23 @@ jobs:
           command: |
             export PATH="$HOME/.cargo/bin:$PATH"
             source .venv/bin/activate
-            mkdir -p lambda_package
-            # Copy service files from new location
-            cp components/jira_service/src/jira_service/main.py lambda_package/
-            cp components/jira_service/src/jira_service/auth.py lambda_package/
-            # Copy handler.py - create it if not in new location
-            cp test_lambda_package/handler.py lambda_package/
-            # Copy local packages directly
+            mkdir -p lambda_package/jira_service
+            # Copy jira_service as a package (preserves internal imports)
+            cp components/jira_service/src/jira_service/*.py \
+              lambda_package/jira_service/
+            # Ensure it's a proper package
+            touch lambda_package/jira_service/__init__.py
+            # Copy handler.py to root so Lambda can find it
+            cp components/jira_service/src/jira_service/handler.py \
+              lambda_package/handler.py
+            # Copy other local packages
             cp -r components/jira_client_impl/src/jira_client_impl \
               lambda_package/jira_client_impl
             cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface \
               lambda_package/work_mgmt_client_interface
             cp -r components/jira_service_adapter/src/jira_service_adapter \
               lambda_package/jira_service_adapter
-            # Install dependencies
+            # Install PyPI dependencies
             uv pip install mangum fastapi python-dotenv requests \
               "pydantic==2.10.6" "pydantic-core==2.27.2" \
               --python-platform x86_64-unknown-linux-gnu \
@@ -183,6 +186,7 @@ jobs:
               -t lambda_package/
             echo "--- lambda_package contents ---"
             ls -la lambda_package/
+            ls -la lambda_package/jira_service/
             find lambda_package/ -name "_pydantic_core*.so" | head -5
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
