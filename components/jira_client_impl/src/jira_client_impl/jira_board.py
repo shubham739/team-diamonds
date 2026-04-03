@@ -1,4 +1,5 @@
 """Implementation of Jira Board which is needed for issue tracking with Jira."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -9,6 +10,7 @@ from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
 if TYPE_CHECKING:
     from jira_client_impl.jira_impl import JiraClient
+
 
 @dataclass
 class JiraBoard(Board):
@@ -36,6 +38,7 @@ class JiraBoard(Board):
     def name(self) -> str:
         """Return name."""
         return self._name
+
     @property
     def columns(self) -> list[BoardColumn]:
         """Return columns."""
@@ -48,7 +51,7 @@ class JiraBoard(Board):
 
         Returns Issue objects (your JiraIssue adapter) by reusing JiraClient.build_issue().
         """
-        data = self._client._get( # noqa: SLF001
+        data = self._client._get(  # noqa: SLF001
             f"/board/{self._board_id}/issue",
             params={"fields": "summary,description,status,assignee,duedate"},
         )
@@ -60,9 +63,7 @@ class JiraBoard(Board):
             return []
 
         # Convert raw Agile "issues" to JiraIssue instances using your JiraClient
-        built: list[Issue] = [
-            self._client.build_issue(i)
-            for i in raw_issues if isinstance(i, dict)]
+        built: list[Issue] = [self._client.build_issue(i) for i in raw_issues if isinstance(i, dict)]
 
         if status is None:
             return built

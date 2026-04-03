@@ -4,18 +4,24 @@ Authentication
 --------------
 The client supports two credential modes:
 
-1. When get_client(interactive = True)
-    User is prompted for the three values above at runtime if any are missing from the environment.
-2. When get_client(interactive = False) - Default
+1. API Token (Basic Auth) — get_client(interactive=False) or get_client(interactive=True)
         JIRA_BASE_URL   https://myorg.atlassian.net
         JIRA_USER_EMAIL me@example.com
         JIRA_API_TOKEN  <token from https://id.atlassian.com/manage-profile/security/api-tokens>
+
+2. OAuth2 Bearer Token — get_oauth_client(access_token)
+        JIRA_CLOUD_ID   <cloud ID from https://api.atlassian.com/oauth/token/accessible-resources>
+        access_token    Atlassian OAuth2 access token (passed at call-time, NOT read from env)
+
+   When using OAuth2, the Atlassian REST API base URL changes to:
+        https://api.atlassian.com/ex/jira/{cloud_id}
 
 Dependencies:
     uv add requests
 
 """
-#to avoid having to consider forward declarations, the below line must be first line in the file
+
+# to avoid having to consider forward declarations, the below line must be first line in the file
 from __future__ import annotations
 
 import os
@@ -44,16 +50,16 @@ JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | flo
 # ---------------------------------------------------------------------------
 
 _STATUS_TO_JQL: dict[Status, str] = {
-    Status.TODO:            '"To Do"',
-    Status.IN_PROGRESS:     '"In Progress"',
-    Status.COMPLETE:        '"Complete"',
-    Status.CANCELLED:       '"Cancelled"',
+    Status.TODO: '"To Do"',
+    Status.IN_PROGRESS: '"In Progress"',
+    Status.COMPLETE: '"Complete"',
+    Status.CANCELLED: '"Cancelled"',
 }
 
 JIRA_SPECIAL_CHARS = r'(["\'*?=~><!\+\-:&|()\[\]{}\\^])'
 
-#Jira requires a transition to be selected to change status
-#the below is a mapping of common statuses and a mapping to a recognized transition in Jira
+# Jira requires a transition to be selected to change status
+# the below is a mapping of common statuses and a mapping to a recognized transition in Jira
 _STATUS_TO_JIRA_TRANSITION: dict[Status, list[str]] = {
     Status.TODO: [
         "to do",
@@ -91,16 +97,20 @@ _STATUS_TO_JIRA_TRANSITION: dict[Status, list[str]] = {
 class JiraError(Exception):
     """Raise when the Jira API returns an unexpected response."""
 
+
 class IssueNotFoundError(BaseIssueNotFoundError):
     """Raise when a requested Jira issue does not exist."""
+
 
 def sanitize_input(value: str) -> str:
     """Sanitize input."""
     return re.sub(JIRA_SPECIAL_CHARS, r"\\\1", value)
 
+
 # ---------------------------------------------------------------------------
 # Client implementation
 # ---------------------------------------------------------------------------
+
 
 class JiraClient(IssueTrackerClient):
     """Concrete implementation of the Client abstraction using Jira API.
@@ -114,13 +124,37 @@ class JiraClient(IssueTrackerClient):
 
     _API_PREFIX = "/rest/api/3"
 
-    def __init__(self, base_url: str, user_email: str, api_token: str) -> None:
-        """Initialize Jira Client."""
+    def __init__(
+        self,
+        base_url: str,
+        user_email: str = "",
+        api_token: str = "",
+        *,
+        access_token: str = "",
+    ) -> None:
+        """Initialize Jira Client.
+
+        Either (user_email + api_token) for Basic Auth, or access_token for OAuth2 Bearer.
+        OAuth2 mode is used when the service receives a per-user Atlassian token from the
+        Authorization Code flow; in that case base_url should be the Atlassian API base
+        (https://api.atlassian.com/ex/jira/{cloud_id}).
+        """
         self._base_url = base_url.rstrip("/")
-        self._auth = HTTPBasicAuth(user_email, api_token)
         self._session = requests.Session()
-        self._session.auth = self._auth
-        self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
+        if access_token:
+            # OAuth2 bearer token mode — used by the FastAPI service per-user path
+            self._session.headers.update(
+                {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+        else:
+            # API token / Basic Auth mode — used by the local library path
+            self._auth = HTTPBasicAuth(user_email, api_token)
+            self._session.auth = self._auth
+            self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
 
     # ------------------------------------------------------------------
     # Internal HTTP helpers
@@ -218,7 +252,7 @@ class JiraClient(IssueTrackerClient):
 
     def get_issue(self, issue_id: str) -> JiraIssue:
         """Fetch a single Jira issue by id."""
-        #_get returns a json string, build_issue builds the Issue instance
+        # _get returns a json string, build_issue builds the Issue instance
         data = self._get(f"/issue/{issue_id}")
 
         if not isinstance(data, dict):
@@ -270,9 +304,7 @@ class JiraClient(IssueTrackerClient):
             if not isinstance(raw_issues, list):
                 break
 
-            issues: list[dict[str, Any]] = [
-                i for i in raw_issues if isinstance(i, dict)
-            ]
+            issues: list[dict[str, Any]] = [i for i in raw_issues if isinstance(i, dict)]
 
             if not issues:
                 break
@@ -296,10 +328,10 @@ class JiraClient(IssueTrackerClient):
         status: Status | None = None,
         assignee: str | None = None,
         due_date: str | None = None,
-        ) -> JiraIssue:
+    ) -> JiraIssue:
         # A board is a required field in Jira, and likely all other issue tracker implementations
         """Create a new Jira issue and return it as a JiraIssue."""
-        #required fields -- title and issue type
+        # required fields -- title and issue type
         fields: dict[str, Any] = {
             "summary": title,
             "issuetype": {"name": "Issue"},
@@ -360,11 +392,10 @@ class JiraClient(IssueTrackerClient):
         if "due_date" in changed:
             fields["duedate"] = changed["due_date"]
 
-
         if fields:
             self._put(f"/issue/{issue_id}", {"fields": fields})
 
-        #status changes must occur after the _put call
+        # status changes must occur after the _put call
         if "status" in changed:
             self._apply_status_transition(issue_id, changed["status"])
 
@@ -379,7 +410,6 @@ class JiraClient(IssueTrackerClient):
         """
         self._delete(f"/issue/{issue_id}")
 
-
     # ------------------------------------------------------------------
     # Status transition helper
     # ------------------------------------------------------------------
@@ -390,10 +420,10 @@ class JiraClient(IssueTrackerClient):
         You have to ask Jira which transitions are available for specific issue, and then trigger
         said transition by its ID.
         """
-        #since our status value have an undercore, this changes the underscores to spaces, and lowers text
+        # since our status value have an undercore, this changes the underscores to spaces, and lowers text
         target.value.replace("_", " ").lower()
 
-        #calls the Jira API to get a list of transitions available for this issue
+        # calls the Jira API to get a list of transitions available for this issue
         data = self._get(f"/issue/{issue_id}/transitions")
 
         if not isinstance(data, dict):
@@ -403,7 +433,7 @@ class JiraClient(IssueTrackerClient):
         raw_transitions = data.get("transitions", [])
 
         if not isinstance(raw_transitions, list):
-                raw_transitions = []
+            raw_transitions = []
 
         transitions: list[dict[str, Any]] = [t for t in raw_transitions if isinstance(t, dict)]
 
@@ -416,12 +446,9 @@ class JiraClient(IssueTrackerClient):
             if candidate.lower() in available:
                 match = available[candidate.lower()]
                 break
-        #raises Jira error if there are no available transitions
+        # raises Jira error if there are no available transitions
         if match is None:
-            msg = (
-                f"No transition to '{target.value}' found for {issue_id}. "
-                f"Available transitions: {list(available.keys())}"
-            )
+            msg = f"No transition to '{target.value}' found for {issue_id}. Available transitions: {list(available.keys())}"
             raise JiraError(msg)
 
         self._post(f"/issue/{issue_id}/transitions", {"transition": {"id": match["id"]}})
@@ -430,6 +457,7 @@ class JiraClient(IssueTrackerClient):
 # ---------------------------------------------------------------------------
 # ADF builder -  Jira requires description data to be in this format
 # ---------------------------------------------------------------------------
+
 
 def _text_to_adf(text: str) -> dict[str, Any]:
     """Translate text to adf format.
@@ -457,6 +485,7 @@ def _text_to_adf(text: str) -> dict[str, Any]:
 # Get client
 # ---------------------------------------------------------------------------
 
+
 def get_client(*, interactive: bool = False) -> JiraClient:
     """Return a configured JiraClient.
 
@@ -472,8 +501,8 @@ def get_client(*, interactive: bool = False) -> JiraClient:
     user_email = os.environ.get("JIRA_USER_EMAIL", "")
     api_token = os.environ.get("JIRA_API_TOKEN", "")
 
-    #This if block is not included in test coverage calculations, because it is meant for development purposes only.
-    if interactive: # pragma: no cover
+    # This if block is not included in test coverage calculations, because it is meant for development purposes only.
+    if interactive:  # pragma: no cover
         if not base_url:
             base_url = input("Jira base URL (e.g. https://myorg.atlassian.net): ").strip()
         if not user_email:
@@ -481,17 +510,50 @@ def get_client(*, interactive: bool = False) -> JiraClient:
         if not api_token:
             api_token = getpass("Jira API token: ")
     else:
-        #collects the missing fields and raises an error alerting to the missing values
-        missing = [name for name, val in [
-            ("JIRA_BASE_URL", base_url),
-            ("JIRA_USER_EMAIL", user_email),
-            ("JIRA_API_TOKEN", api_token),
-        ] if not val]
+        # collects the missing fields and raises an error alerting to the missing values
+        missing = [
+            name
+            for name, val in [
+                ("JIRA_BASE_URL", base_url),
+                ("JIRA_USER_EMAIL", user_email),
+                ("JIRA_API_TOKEN", api_token),
+            ]
+            if not val
+        ]
         if missing:
-            msg = (
-                f"Missing required environment variables: {', '.join(missing)}. "
-                "Set them or call get_client(interactive=True)."
-            )
+            msg = f"Missing required environment variables: {', '.join(missing)}. Set them or call get_client(interactive=True)."
             raise OSError(msg)
 
     return JiraClient(base_url, user_email, api_token)
+
+
+def get_oauth_client(access_token: str) -> JiraClient:
+    """Return a JiraClient configured for OAuth2 Bearer token authentication.
+
+    This is the correct factory to use inside the FastAPI service when the caller
+    has already completed the OAuth2 Authorization Code flow and holds a per-user
+    Atlassian access token.
+
+    The Atlassian REST API for OAuth2 apps uses a different base URL:
+        https://api.atlassian.com/ex/jira/{cloud_id}
+
+    Environment variables:
+        JIRA_CLOUD_ID: The cloud ID from
+            https://api.atlassian.com/oauth/token/accessible-resources
+
+    Args:
+        access_token: A valid Atlassian OAuth2 access token.
+
+    Raises:
+        OSError: If JIRA_CLOUD_ID environment variable is not set.
+
+    """
+    cloud_id = os.environ.get("JIRA_CLOUD_ID", "")
+    if not cloud_id:
+        msg = (
+            "Missing required environment variable: JIRA_CLOUD_ID. "
+            "Set it to the cloud ID from https://api.atlassian.com/oauth/token/accessible-resources"
+        )
+        raise OSError(msg)
+    base_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
+    return JiraClient(base_url, access_token=access_token)

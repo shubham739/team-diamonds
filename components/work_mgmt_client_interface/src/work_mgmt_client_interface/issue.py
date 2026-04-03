@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Any
 
 
-#we can alter these, these are just 4 common statuses that I thought would be good starting point.
+# we can alter these, these are just 4 common statuses that I thought would be good starting point.
 class Status(StrEnum):
     """Maintain different status types for issues."""
 
@@ -16,9 +16,10 @@ class Status(StrEnum):
     COMPLETE = "complete"
     CANCELLED = "cancelled"
 
+
 @dataclass
-#opted for dataclass instead of standard class so that partial updates can be made
-#dataclass handles __init__, __repr__, and __eq__
+# opted for dataclass instead of standard class so that partial updates can be made
+# dataclass handles __init__, __repr__, and __eq__
 class IssueUpdate:
     """All fields default to None. During an update, only fields explicitly changed to non-None value will be changed."""
 
@@ -31,6 +32,7 @@ class IssueUpdate:
     def set_fields(self) -> dict[str, Any]:
         """Return a dict containing only the fields explicitly set to non-None values (the only ones to be updated)."""
         return {f.name: getattr(self, f.name) for f in dataclass_fields(self) if getattr(self, f.name) is not None}
+
 
 class Issue(ABC):
     """Abstract base class representing a issue."""
@@ -71,10 +73,11 @@ class Issue(ABC):
         """Return the due date, or None if not set."""
         raise NotImplementedError
 
-    #equivalent to Javas .toString()
+    # equivalent to Javas .toString()
     def __repr__(self) -> str:
         """Perform operation similar to Java .toString()."""
         return f"<Issue id={self.id!r} title={self.title!r} status={self.status}>"
+
 
 def build_issue(issue_id: str, raw_data: dict[str, Any]) -> "Issue":
     """Purpose: Retrieves API data and builds an Issue, returning an Issue instance.

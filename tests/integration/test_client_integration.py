@@ -19,10 +19,7 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(scope="module")
 def client() -> JiraClient:
     """Return a live, authenticated JiraClient, or skip if credentials are absent."""
-    missing = [
-        var for var in ("JIRA_BASE_URL", "JIRA_USER_EMAIL", "JIRA_API_TOKEN")
-        if not os.environ.get(var)
-    ]
+    missing = [var for var in ("JIRA_BASE_URL", "JIRA_USER_EMAIL", "JIRA_API_TOKEN") if not os.environ.get(var)]
     if missing:
         pytest.skip(f"Missing env vars: {missing}")
     return get_client(interactive=False)
