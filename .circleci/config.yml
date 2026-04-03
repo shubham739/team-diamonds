@@ -169,6 +169,7 @@ jobs:
             # Ensure it's a proper package
             touch lambda_package/jira_service/__init__.py
             # Copy handler.py to root so Lambda can find it
+            cp components/jira_service/src/jira_service/main.py lambda_package/
             cp components/jira_service/src/jira_service/handler.py \
               lambda_package/handler.py
             # Copy other local packages
