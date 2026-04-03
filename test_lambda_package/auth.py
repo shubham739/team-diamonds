@@ -98,8 +98,7 @@ def store_session(user_id: str, token_data: dict[str, Any]) -> None:
     user_sessions[user_id] = {
         "access_token": token_data.get("access_token"),
         "refresh_token": token_data.get("refresh_token"),
-        "expires_at": datetime.now(UTC)
-        + timedelta(seconds=token_data.get("expires_in", 3600)),
+        "expires_at": datetime.now(UTC) + timedelta(seconds=token_data.get("expires_in", 3600)),
     }
 
 

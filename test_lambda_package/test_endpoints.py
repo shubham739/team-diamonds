@@ -1,4 +1,5 @@
 """Test all endpoints of the FastAPI service."""
+
 import logging
 
 import requests

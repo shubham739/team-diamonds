@@ -32,14 +32,14 @@ class IssueTrackerClient(ABC):
     @abstractmethod
     def get_issues(
         self,
-        *, # asterisk indicates that all calls to this method must specify the argument name: get_issues(title="Sample Title")
+        *,  # asterisk indicates that all calls to this method must specify the argument name: get_issues(title="Sample Title")
         title: str | None = None,
         description: str | None = None,
         status: Status | None = None,
         assignee: str | None = None,
         due_date: str | None = None,
         max_results: int = 20,
-        ) -> Iterator[Issue]:
+    ) -> Iterator[Issue]:
         """Get issues."""
         """"
         Args:
@@ -67,7 +67,7 @@ class IssueTrackerClient(ABC):
         status: Status | None = None,
         assignee: str | None = None,
         due_date: str | None = None,
-        ) -> Issue:
+    ) -> Issue:
         """Create an issue."""
         """Args:
             title:       Short title for the new issue
@@ -103,7 +103,6 @@ class IssueTrackerClient(ABC):
         """
         raise NotImplementedError
 
-
     @abstractmethod
     def delete_issue(self, issue_id: str) -> None:
         """Delete an issue."""
@@ -120,6 +119,7 @@ class IssueTrackerClient(ABC):
 
         """
         raise NotImplementedError
+
 
 class IssueNotFoundError(Exception):
     """Base exception raised when an issue cannot be found by the client."""
