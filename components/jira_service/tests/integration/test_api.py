@@ -12,7 +12,7 @@ request/response shapes, error mapping) rather than on the Jira client logic
 
 from __future__ import annotations
 
-from typing import Any, Generator
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,6 +21,9 @@ from fastapi.testclient import TestClient
 from jira_service.main import app, get_jira_client
 from work_mgmt_client_interface.client import IssueNotFoundError
 from work_mgmt_client_interface.issue import Status
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 pytestmark = pytest.mark.integration
 
