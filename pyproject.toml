@@ -133,4 +133,4 @@ jira-service-api-client = {workspace = true}
 jira-service-adapter = {workspace = true}
 
 [tool.fastapi]
-entrypoint = "main:app"
+entrypoint = "jira_service.main:app"

@@ -30,7 +30,7 @@ from work_mgmt_client_interface.issue import Issue
 
 pytestmark = pytest.mark.e2e
 
-MAIN_SCRIPT = Path(__file__).parent.parent.parent / "main.py"
+MAIN_SCRIPT = Path(__file__).parent.parent.parent / "components" / "jira_service" / "src" / "jira_service" / "main.py"
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ class TestMainScriptStructure:
         """All imports in main.py must resolve without error."""
         if not MAIN_SCRIPT.exists():
             pytest.skip("main.py not found.")
-        root = MAIN_SCRIPT.parent
+        root = Path(__file__).parent.parent.parent
         pythonpath = os.pathsep.join([
             str(root / "components" / "jira_client_impl" / "src"),
             str(root / "components" / "work_mgmt_client_interface" / "src"),
@@ -106,7 +106,7 @@ class TestMainScriptStructure:
             capture_output=True,
             text=True,
             timeout=30,
-            cwd=str(MAIN_SCRIPT.parent),
+            cwd=str(root),
             env=env,
             check=False,
         )
@@ -123,9 +123,9 @@ class TestApplicationStructure:
     @pytest.mark.circleci
     def test_required_project_files_exist(self) -> None:
         """All required source files must be present at their expected paths."""
-        root = MAIN_SCRIPT.parent
+        root = Path(__file__).parent.parent.parent
         required = [
-            "main.py",
+            "components/jira_service/src/jira_service/main.py",
             "pyproject.toml",
             "components/jira_client_impl/src/jira_client_impl/__init__.py",
             "components/jira_client_impl/src/jira_client_impl/jira_impl.py",

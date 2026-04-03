@@ -28,7 +28,7 @@ from work_mgmt_client_interface.client import IssueTrackerClient
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 # Loading .env from inside .venv for local development
-venv_env_path = Path(__file__).parents[3] / ".venv" / ".env"
+venv_env_path = Path(__file__).resolve().parents[4] / ".venv" / ".env"
 load_dotenv(venv_env_path)
 
 logger = logging.getLogger(__name__)
