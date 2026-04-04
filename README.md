@@ -33,62 +33,40 @@ feels seamless, regardless of which platforms your team uses.
 
 ## Repository Structure
 
-```
-├── components/
-│   ├── work_mgmt_client_interface/   # Vendor-neutral interface contracts (ABC)
-│   │   ├── src/
-│   │   └── README.md
-│   │
-│   ├── jira_client_impl/             # Local Jira implementation (Basic Auth + OAuth2)
-│   │   ├── src/
-│   │   ├── tests/
-│   │   └── README.md
-│   │
-│   ├── jira_service/                 # FastAPI microservice (HW2)
-│   │   ├── src/
-│   │   ├── tests/
-│   │   └── README.md
-│   │
-│   ├── jira_service_api_client/      # Type-safe HTTP client for jira-service (HW2)
-│   │   ├── src/
-│   │   ├── tests/
-│   │   └── README.md
-│   │
-│   └── jira_service_adapter/         # Adapter: IssueTrackerClient over HTTP (HW2)
-│       ├── src/
-│       ├── tests/
-│       └── README.md
-│
-├── tests/
-│   ├── integration/                  # Integration tests (real Jira API, CI-gated)
-│   └── e2e/                          # End-to-end tests
-│
-├── docs/                             # MkDocs documentation source
-├── .circleci/config.yml              # CI/CD pipeline
-├── Dockerfile                        # Production Docker image
-├── render.yaml                       # Render.com deployment config
-├── openapi.json                      # OpenAPI 3.1.0 spec (auto-generated from service)
-├── makefile                          # Developer helpers (install, generate-client)
-└── pyproject.toml                    # Root uv workspace + ruff / mypy / pytest config
-```
+- components/
+    - work_mgmt_client_interface/                                  # Vendor-neutral interfaces and shared domain models.
+    - jira_client_impl/                                           # Direct Jira client implementation (local/library path).
+    - jira_service/                                               # FastAPI service exposing Jira operations over HTTP.
+    - jira_service_api_client/                                    # Typed HTTP client for the service API.
+    - jira_service_adapter/                                       # Adapter that implements the common interface using the service client.
+
+- tests/
+    - unit/                                                       # Unit test suite.
+    - integration/                                                # Integration tests (including live Jira scenarios in CI contexts).
+    - e2e/                                                        # End-to-end workflow tests.
+
+- docs/
+    - Architecture, component docs, contribution guidance, and implementation notes.
+
+- Root config/infrastructure
+    - Workspace/tooling config, CI pipeline, container/deployment config, and project metadata.
+
 
 ---
 
 ## How It Works
 
-The project is split into five layers (HW1 introduced layers 1–2; HW2 added 3–5):
+The project uses a layered architecture for location transparency:
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
-| 1 | `work-mgmt-client-interface` | Abstract contract — defines *what* a client does |
+| 1 | `work-mgmt-client-interface` | Abstract contract — defines what a client does |
 | 2 | `jira-client-impl` | Local Jira implementation — calls Jira REST API directly |
-| 3 | `jira-service` | FastAPI service — exposes layer 2 over HTTP with OAuth2 |
+| 3 | `jira-service` | FastAPI service — exposes layer 2 over HTTP |
 | 4 | `jira-service-api-client` | Type-safe HTTP client for the FastAPI service |
 | 5 | `jira-service-adapter` | Adapter — wraps layer 4 behind the layer 1 interface |
 
-**Location transparency:** Layers 2 and 5 both implement the same
-`IssueTrackerClient` ABC, so consumer code (e.g. `main.py`) is identical
-regardless of which path is chosen:
+Consumers use the same `get_client()` call for local or remote access.
 
 ```python
 # Option A — local library
@@ -104,27 +82,16 @@ client = get_client()   # same interface, same call sites
 
 ## Deployment
 
-The FastAPI service is deployed on **Render.com** (Docker, free plan).
+The FastAPI service is deployed as a Docker container via AWS Lambda.
 
 | Item | Value |
 |------|-------|
-| Platform | Render.com |
-| Deployment URL | `https://team-diamonds.onrender.com` |
-| Health check | `GET /team-diamonds.onrender.com/health` → `{"status": "ok"}` |
-| OpenAPI spec | `https://team-diamonds.onrender.com/openapi.json` |
-| Interactive docs | `https://team-diamonds.onrender.com/docs` |
-
-### Environment Variables (set via Render Secrets — never committed)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JIRA_OAUTH_CLIENT_ID` | Yes | Atlassian OAuth2 app client ID |
-| `JIRA_OAUTH_CLIENT_SECRET` | Yes | Atlassian OAuth2 app client secret |
-| `JIRA_OAUTH_REDIRECT_URI` | Yes | OAuth callback URL registered in Atlassian |
-| `JIRA_CLOUD_ID` | Prod | Cloud ID for OAuth2 Jira API base. From `/oauth/token/accessible-resources` |
-| `JIRA_BASE_URL` | Dev/CI | Jira instance URL for Basic Auth fallback |
-| `JIRA_USER_EMAIL` | Dev/CI | Atlassian account email for Basic Auth |
-| `JIRA_API_TOKEN` | Dev/CI | API token from Atlassian account settings |
+| Platform | AWS Lambda |
+| Service URL | Configured via AWS Lambda and API Gateway |
+| OAuth Redirect URI | Configured via `JIRA_OAUTH_REDIRECT_URI` environment variable for OAuth callback handling |
+| Health check | `GET /health` → `{"status": "ok"}` |
+| OpenAPI spec | `GET /openapi.json` |
+| Interactive docs | `GET /docs` |
 
 ### OAuth2 Redirect URIs
 

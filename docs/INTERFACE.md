@@ -5,6 +5,7 @@ This package defines the contracts that any issue tracker client must implement.
 | File | Purpose |
 |------|---------|
 | `issue.py` | `Issue` ABC, `IssueUpdate` dataclass, and `Status` enum |
+| `board.py` | Board ABC for board/project management |
 | `client.py` | `IssueTrackerClient` ABC, `IssueNotFoundError`, and `get_client()` factory stub |
 | `__init__.py` | Re-exports `IssueTrackerClient` and `get_client` |
 | `pyproject.toml` | Package metadata and build configuration |
@@ -38,11 +39,6 @@ An abstract base class defining the full CRUD interface. Implementations must pr
 A factory function stub that concrete implementations replace. Accepts an `interactive` flag:
 - `interactive=False` (default): credentials must come from environment variables
 - `interactive=True`: the implementation may prompt the user for missing credentials
-
-## Tests
-Unit tests are located in `tests/`. To run them:
-
-    python -m pytest components/work_mgmt_client_interface/tests/ -v
 
 ## Installation
 ```bash
