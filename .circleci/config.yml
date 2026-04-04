@@ -197,14 +197,17 @@ jobs:
             aws lambda update-function-configuration \
               --function-name team-diamonds-deployment \
               --runtime python3.12 \
-              --region us-east-2
+              --region us-east-2 \
+              > /dev/null
             aws lambda update-function-code \
               --function-name team-diamonds-deployment \
               --zip-file fileb://deployment.zip \
-              --region us-east-2
+              --region us-east-2 \
+              > /dev/null
             aws lambda wait function-updated \
               --function-name team-diamonds-deployment \
               --region us-east-2
+            echo "Lambda deploy complete."
       - run:
           name: "Verify /health endpoint"
           command: |

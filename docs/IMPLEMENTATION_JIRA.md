@@ -9,7 +9,10 @@ This package provides `JiraClient`, a concrete implementation of `IssueTrackerCl
 | `__init__.py` | Re-exports `get_client` |
 
 ## Authentication
-Credentials are read from environment variables:
+The package supports two authentication methods, chosen based on the factory function used:
+
+#### Basic Auth (Development, Single-User)
+Used by `get_client()`. Reads credentials from environment variables for direct Jira API access.
 
 | Variable | Description |
 |----------|-------------|
@@ -17,16 +20,28 @@ Credentials are read from environment variables:
 | `JIRA_USER_EMAIL` | Email address associated with your Atlassian account |
 | `JIRA_API_TOKEN` | API token from [Atlassian account settings](https://id.atlassian.com/manage-profile/security/api-tokens) |
 
+#### OAuth2 Bearer Token (Production, Multi-User)
+Used by `get_oauth_client(access_token)`. Requires a valid Atlassian OAuth2 access token obtained via the service's OAuth flow.
+
+| Variable | Description |
+|----------|-------------|
+| `JIRA_CLOUD_ID` | Cloud ID for OAuth2 API base URL. Obtain from `/oauth/token/accessible-resources` |
+| `access_token` | Valid Atlassian OAuth2 access token (passed at runtime, not from env) |
+
+The OAuth2 mode uses a different Jira API base URL (`https://api.atlassian.com/ex/jira/{cloud_id}`) and Bearer auth headers.
 ## Usage
 ```python
-from jira_client_impl import get_client
+from jira_client_impl import get_client, get_oauth_client
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
-# Non-interactive: reads credentials from environment variables
+# Basic Auth: Non-interactive (reads credentials from environment variables)
 client = get_client()
 
-# Interactive: prompts for any missing credentials at runtime
+# Basic Auth: Interactive (prompts for any missing credentials at runtime)
 client = get_client(interactive=True)
+
+# OAuth2: Pass the access token obtained from the service's OAuth flow
+client = get_oauth_client(access_token="your_oauth_token_here")
 
 # Fetch a single issue
 issue = client.get_issue("PROJ-42")

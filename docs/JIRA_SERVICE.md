@@ -24,24 +24,33 @@ Jira REST API v3 / Atlassian API
 
 ## Authentication
 
-The service implements **OAuth 2.0 Authorization Code Flow for Web Applications**
-as required by HW2.
+## Authentication
 
-| Step | Endpoint | Description |
-|------|----------|-------------|
-| 1 | `GET /auth/login` | Redirects the user's browser to Atlassian's authorization URL |
-| 2 | `GET /auth/callback` | Receives the authorization code, exchanges it for tokens, stores the session |
-| 3 | Bearer header | All issue endpoints require `Authorization: Bearer <access_token>` |
-| 4 | `GET /auth/logout` | Clears the in-memory session for the given `user_id` |
+The service supports two authentication strategies, chosen based on environment configuration:
 
-Credentials (tokens) are stored in an in-memory dict keyed by `account_id`.
-Tokens are auto-refreshed transparently when they expire.
+#### OAuth2 Bearer Token Path (Production, Multi-User)
+When `JIRA_CLOUD_ID` is set, the service uses Atlassian OAuth2 bearer tokens for Jira API access. This enables multi-user deployments where each request carries a per-user access token obtained via the OAuth2 Authorization Code flow.
+
+The standard web-server OAuth 2.0 flow is implemented:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/auth/login` | GET | Redirect browser to Jira's authorization URL |
+| `/auth/callback` | GET | Receive code, exchange for tokens, store session |
+| `/auth/logout` | GET | Invalidate session |
+
+Tokens are stored server-side in an in-memory session dict (keyed by `account_id`) for refresh purposes. The client receives a bearer token it passes on subsequent requests via `Authorization: Bearer <token>`.
+
+#### Basic Auth Fallback Path (Development, Single-User)
+When `JIRA_CLOUD_ID` is not set, the service falls back to Basic Auth using `JIRA_USER_EMAIL` and `JIRA_API_TOKEN`. This is the single-developer path and is also used when the Bearer token in the request header is not a user session token but rather a service-level API token.
+
+In both paths, the FastAPI dependency `get_jira_client` selects the appropriate JiraClient instance based on available environment variables.
 
 ## Endpoints
 
 | Method | Path | Auth Required | Description |
 |--------|------|---------------|-------------|
-| `GET` | `/health` | No | Returns `{"status": "ok"}` — used by Render health checks |
+| `GET` | `/health` | No | Returns `{"status": "ok"}` — used by deployment health checks |
 | `GET` | `/auth/login` | No | Initiates OAuth2 flow |
 | `GET` | `/auth/callback` | No | OAuth2 callback (called by Atlassian) |
 | `GET` | `/auth/logout` | No | Clears user session |

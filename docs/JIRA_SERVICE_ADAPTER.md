@@ -57,7 +57,7 @@ Reads two environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `JIRA_SERVICE_BASE_URL` | Base URL of the deployed service (e.g. `https://team-diamonds.onrender.com`) |
+| `JIRA_SERVICE_BASE_URL` | Base URL of the deployed service (e.g. `https://yx6edoh8l4.execute-api.us-east-2.amazonaws.com/default-deployment/docs`) |
 | `JIRA_SERVICE_ACCESS_TOKEN` | Atlassian OAuth2 access token for the Bearer header |
 
 Raises `OSError` if either variable is missing.

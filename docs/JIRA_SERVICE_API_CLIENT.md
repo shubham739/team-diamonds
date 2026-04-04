@@ -29,7 +29,7 @@ run `uv sync` from the repository root.
 from jira_service_api_client import JiraServiceClient, Status
 
 with JiraServiceClient(
-    base_url="https://your-service.onrender.com",
+    base_url="https://yx6edoh8l4.execute-api.us-east-2.amazonaws.com/default-deployment/docs",
     access_token="<atlassian-oauth2-token>",
 ) as client:
     # Check service health (no auth required)
