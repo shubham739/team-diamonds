@@ -33,14 +33,19 @@ from typing import TYPE_CHECKING, Any, TypeAlias, cast
 import requests
 from requests.auth import HTTPBasicAuth
 
+from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_issue import JiraIssue
 from jira_client_impl.jira_issue import get_issue as _make_issue
+from jira_client_impl.jira_list import JiraList
 from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
 from work_mgmt_client_interface.client import IssueTrackerClient
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from work_mgmt_client_interface.board import Board
+    from work_mgmt_client_interface.list import List
 
 # A precise definition of what JSON can actually contain!
 JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None  # noqa: UP040
@@ -123,6 +128,7 @@ class JiraClient(IssueTrackerClient):
     """
 
     _API_PREFIX = "/rest/api/3"
+    _AGILE_PREFIX = "/rest/agile/1.0"
 
     def __init__(
         self,
@@ -163,6 +169,16 @@ class JiraClient(IssueTrackerClient):
     def _url(self, path: str) -> str:
         """Return base url."""
         return f"{self._base_url}{self._API_PREFIX}{path}"
+
+    def _agile_url(self, path: str) -> str:
+        """Return agile API url (used for board and sprint endpoints)."""
+        return f"{self._base_url}{self._AGILE_PREFIX}{path}"
+
+    def _agile_get(self, path: str, params: dict[str, Any] | None = None) -> JsonData:
+        """Perform a GET against the Jira Agile REST API."""
+        response = self._session.get(self._agile_url(path), params=params)
+        self._raise_for_status(response)
+        return cast("JsonData", response.json())
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> JsonData:
         """Return json response for HTTP get message."""
@@ -209,7 +225,7 @@ class JiraClient(IssueTrackerClient):
 
     def build_issue(self, issue: dict[str, Any]) -> JiraIssue:
         """Build Jira Issue."""
-        return _make_issue(issue["key"], issue.get("fields", {}), self._base_url)
+        return _make_issue(issue["key"], issue.get("fields", {}), self._base_url, client=self)
 
     def _build_jql_query(
         self,
@@ -409,6 +425,134 @@ class JiraClient(IssueTrackerClient):
 
         """
         self._delete(f"/issue/{issue_id}")
+
+    # ------------------------------------------------------------------
+    # Board access (Jira Agile API)
+    # ------------------------------------------------------------------
+
+    def get_board(self, board_id: str) -> Board:
+        """Return a single Jira board by id.
+
+        Args:
+            board_id: The Jira agile board ID.
+
+        Returns:
+            A JiraBoard instance.
+
+        Raises:
+            IssueNotFoundError: If no board with that ID exists.
+
+        """
+        data = self._agile_get(f"/board/{board_id}")
+        if not isinstance(data, dict):
+            msg = f"Jira API returned unexpected type for board {board_id}"
+            raise TypeError(msg)
+        return JiraBoard(
+            _board_id=str(board_id),
+            _name=str(data.get("name", "")),
+            _client=self,
+        )
+
+    def get_boards(self) -> Iterator[Board]:
+        """Return an iterator over all Jira agile boards visible to the current credentials.
+
+        Yields:
+            JiraBoard instances, one per board.
+
+        """
+        start_at = 0
+        page_size = 50
+        while True:
+            data = self._agile_get("/board", params={"startAt": start_at, "maxResults": page_size})
+            if not isinstance(data, dict):
+                break
+            values = data.get("values", [])
+            if not isinstance(values, list) or not values:
+                break
+            for board in values:
+                if not isinstance(board, dict):
+                    continue
+                yield JiraBoard(
+                    _board_id=str(board.get("id", "")),
+                    _name=str(board.get("name", "")),
+                    _client=self,
+                )
+            start_at += len(values)
+            if data.get("isLast", True):
+                break
+
+    # ------------------------------------------------------------------
+    # List access (board columns exposed as List objects)
+    # ------------------------------------------------------------------
+
+    def get_list(self, list_id: str) -> List:
+        """Return a single list (board column) by composite id.
+
+        The ``list_id`` must follow the format ``"{board_id}:{status_value}"``
+        (e.g. ``"123:todo"``), which encodes both the parent board and the
+        column's normalized status.
+
+        Args:
+            list_id: Composite identifier in the form ``"{board_id}:{status}"``.
+
+        Returns:
+            A JiraList instance representing that column.
+
+        Raises:
+            ValueError: If ``list_id`` is malformed or the status is unknown.
+
+        """
+        parts = list_id.split(":", 1)
+        if len(parts) != 2:  # noqa: PLR2004
+            msg = f"Invalid list_id {list_id!r}. Expected format: '{{board_id}}:{{status}}'"
+            raise ValueError(msg)
+        board_id, status_value = parts
+        try:
+            status = Status(status_value)
+        except ValueError:
+            msg = f"Unknown status value {status_value!r} in list_id {list_id!r}"
+            raise ValueError(msg) from None
+        board = self.get_board(board_id)
+        if not isinstance(board, JiraBoard):
+            msg = "get_board returned unexpected type"
+            raise TypeError(msg)
+        for column in board.columns:
+            if column.status == status:
+                return JiraList(
+                    _list_id=list_id,
+                    _board_id=board_id,
+                    _name=column.name,
+                    _status=status,
+                    _client=self,
+                )
+        msg = f"Status {status_value!r} not found in board {board_id}"
+        raise ValueError(msg)
+
+    def get_lists(self, board_id: str) -> Iterator[List]:
+        """Return the columns of a Jira board as List objects.
+
+        Each column (To Do, In Progress, Done, Cancelled) is yielded as a
+        JiraList whose ``id`` is ``"{board_id}:{status_value}"``.
+
+        Args:
+            board_id: The Jira agile board ID.
+
+        Yields:
+            JiraList instances, one per board column.
+
+        """
+        board = self.get_board(board_id)
+        if not isinstance(board, JiraBoard):
+            msg = "get_board returned unexpected type"
+            raise TypeError(msg)
+        for column in board.columns:
+            yield JiraList(
+                _list_id=f"{board_id}:{column.status.value}",
+                _board_id=board_id,
+                _name=column.name,
+                _status=column.status,
+                _client=self,
+            )
 
     # ------------------------------------------------------------------
     # Status transition helper
