@@ -13,8 +13,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from jira_client_impl.jira_board import JiraBoard
-from jira_client_impl.jira_impl import IssueNotFoundError, JiraClient, JiraError, _text_to_adf, get_client
+from jira_client_impl.jira_impl import IssueNotFoundError, JiraClient, JiraError, _text_to_adf, get_client, get_oauth_client
 from jira_client_impl.jira_issue import JiraIssue
+from jira_client_impl.jira_list import JiraList
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 
@@ -509,7 +510,7 @@ def test_list_issues_returns_all_issues_sa(jira_board: Any) -> None:
     # Setup: Mock _get_board_issues to return two raw issues
     # Mock build_issue on the client to return simple mock issue objects
     raw_issues = [{"key": "TEST-1"}, {"key": "TEST-2"}]
-    jira_board._client._get.return_value = {"issues": raw_issues}
+    jira_board._client._agile_get.return_value = {"issues": raw_issues}
 
     mock_issue_1 = MagicMock(status=Status.TODO)
     mock_issue_2 = MagicMock(status=Status.IN_PROGRESS)
@@ -528,7 +529,7 @@ def test_list_issues_filters_by_status_sa(jira_board: Any) -> None:
     """Test that list_issues correctly filters issues by the given status."""
     # Setup: Two issues with different statuses
     raw_issues = [{"key": "TEST-1"}, {"key": "TEST-2"}]
-    jira_board._client._get.return_value = {"issues": raw_issues}
+    jira_board._client._agile_get.return_value = {"issues": raw_issues}
 
     mock_issue_1 = MagicMock(status=Status.TODO)
     mock_issue_2 = MagicMock(status=Status.IN_PROGRESS)
@@ -546,7 +547,7 @@ def test_list_issues_filters_by_status_sa(jira_board: Any) -> None:
 def test_list_issues_returns_empty_when_no_issues_sa(jira_board: Any) -> None:
     """Test that list_issues returns an empty list when the board has no issues."""
     # Setup: Mock _get_board_issues to return an empty list
-    jira_board._client._get.return_value = {"issues": []}
+    jira_board._client._agile_get.return_value = {"issues": []}
 
     # Act: Call list_issues with no filter
     result = jira_board.list_issues()
@@ -559,7 +560,7 @@ def test_list_issues_returns_empty_when_no_status_match_sa(jira_board: Any) -> N
     """Test that list_issues returns an empty list when no issues match the given status filter."""
     # Setup: Board has only TODO issues, but we filter by COMPLETE
     raw_issues = [{"key": "TEST-1"}]
-    jira_board._client._get.return_value = {"issues": raw_issues}
+    jira_board._client._agile_get.return_value = {"issues": raw_issues}
 
     mock_issue_1 = MagicMock(status=Status.TODO)
     jira_board._client.build_issue.return_value = mock_issue_1
@@ -574,14 +575,14 @@ def test_list_issues_returns_empty_when_no_status_match_sa(jira_board: Any) -> N
 def test_list_issues_calls_get_board_issues_with_correct_fields_sa(jira_board: Any) -> None:
     """Test that list_issues calls _get_board_issues with the correct fields parameter."""
     # Setup: Return empty list to keep test simple
-    jira_board._client._get.return_value = {"issues": []}
+    jira_board._client._agile_get.return_value = {"issues": []}
 
     # Act: Call list_issues
     jira_board.list_issues()
 
     # Assert: _get_board_issues should be called with the expected fields
-    jira_board._client._get.assert_called_once_with(
-        "/board/1/issue",
+    jira_board._client._agile_get.assert_called_once_with(
+        f"/board/{jira_board._board_id}/issue",
         params={"fields": "summary,description,status,assignee,duedate"},
     )
 
@@ -678,3 +679,191 @@ def test_raw_http_methods_sa(mock_session_class: MagicMock) -> None:
     mock_delete_not_found = MagicMock(status_code=404, ok=False)
     mock_session.delete.return_value = mock_delete_not_found
     assert client._delete("/path") is False
+
+
+# ----------------------------------------------------------------------
+#                       JIRA LIST TESTS
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def jira_list() -> JiraList:
+    """Return a JiraList with a mocked JiraClient."""
+    mock_client = MagicMock(spec=JiraClient)
+    return JiraList(
+        _list_id="42:todo",
+        _board_id="42",
+        _name="To Do",
+        _status=Status.TODO,
+        _client=mock_client,
+    )
+
+
+def test_jira_list_id_property(jira_list: JiraList) -> None:
+    """JiraList.id returns the composite list_id."""
+    assert jira_list.id == "42:todo"
+
+
+def test_jira_list_board_id_property(jira_list: JiraList) -> None:
+    """JiraList.board_id returns the board portion of the composite id."""
+    assert jira_list.board_id == "42"
+
+
+def test_jira_list_name_property(jira_list: JiraList) -> None:
+    """JiraList.name returns the column display name."""
+    assert jira_list.name == "To Do"
+
+
+def test_jira_list_list_issues_filters_by_own_status(jira_list: JiraList) -> None:
+    """list_issues() delegates to a JiraBoard and defaults to this column's status."""
+    mock_issue = MagicMock(status=Status.TODO)
+    jira_list._client._agile_get.return_value = {"issues": [{"key": "T-1"}]}  # type: ignore[attr-defined]
+    jira_list._client.build_issue.return_value = mock_issue  # type: ignore[attr-defined]
+
+    result = jira_list.list_issues()
+
+    assert result == [mock_issue]
+
+
+def test_jira_list_list_issues_respects_status_override(jira_list: JiraList) -> None:
+    """list_issues(status=X) filters by the supplied status, not the column's own."""
+    mock_issue = MagicMock(status=Status.IN_PROGRESS)
+    jira_list._client._agile_get.return_value = {"issues": [{"key": "T-2"}]}  # type: ignore[attr-defined]
+    jira_list._client.build_issue.return_value = mock_issue  # type: ignore[attr-defined]
+
+    result = jira_list.list_issues(status=Status.IN_PROGRESS)
+
+    assert result == [mock_issue]
+
+
+# ----------------------------------------------------------------------
+#               JIRA BOARD — additional edge-case tests
+# ----------------------------------------------------------------------
+
+
+def test_jira_board_delete_issue_delegates(jira_board: Any) -> None:
+    """JiraBoard.delete_issue delegates to the underlying client."""
+    jira_board.delete_issue("T-99")
+    jira_board._client.delete_issue.assert_called_once_with("T-99")
+
+
+def test_jira_board_list_issues_non_dict_response(jira_board: Any) -> None:
+    """list_issues returns [] when the API response is not a dict."""
+    jira_board._client._agile_get.return_value = None
+    assert jira_board.list_issues() == []
+
+
+def test_jira_board_list_issues_non_list_issues_key(jira_board: Any) -> None:
+    """list_issues returns [] when the 'issues' key is not a list."""
+    jira_board._client._agile_get.return_value = {"issues": "not-a-list"}
+    assert jira_board.list_issues() == []
+
+
+# ----------------------------------------------------------------------
+#               JIRA CLIENT — get_board / get_boards / get_list / get_lists
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def jira_client_agile(jira_client: JiraClient) -> JiraClient:
+    """Extend the base jira_client fixture with a mocked _agile_get."""
+    client_any: Any = jira_client
+    client_any._agile_get = MagicMock()
+    return jira_client
+
+
+def test_get_board_returns_jira_board(jira_client_agile: Any) -> None:
+    """get_board() returns a JiraBoard built from the API response."""
+    jira_client_agile._agile_get.return_value = {"id": 7, "name": "My Board"}
+
+    board = jira_client_agile.get_board("7")
+
+    assert isinstance(board, JiraBoard)
+    assert board.id == "7"
+    assert board.name == "My Board"
+    jira_client_agile._agile_get.assert_called_once_with("/board/7")
+
+
+def test_get_board_raises_on_non_dict_response(jira_client_agile: Any) -> None:
+    """get_board() raises TypeError when the API returns a non-dict."""
+    jira_client_agile._agile_get.return_value = None
+
+    with pytest.raises(TypeError):
+        jira_client_agile.get_board("7")
+
+
+def test_get_boards_yields_all_pages(jira_client_agile: Any) -> None:
+    """get_boards() iterates pages until isLast=True."""
+    jira_client_agile._agile_get.side_effect = [
+        {"values": [{"id": 1, "name": "Board A"}], "isLast": False},
+        {"values": [{"id": 2, "name": "Board B"}], "isLast": True},
+    ]
+
+    boards = list(jira_client_agile.get_boards())
+
+    assert len(boards) == 2
+    assert boards[0].id == "1"
+    assert boards[1].id == "2"
+
+
+def test_get_boards_stops_on_empty_values(jira_client_agile: Any) -> None:
+    """get_boards() stops when values list is empty."""
+    jira_client_agile._agile_get.return_value = {"values": [], "isLast": False}
+
+    boards = list(jira_client_agile.get_boards())
+
+    assert boards == []
+
+
+def test_get_list_returns_jira_list_for_valid_id(jira_client_agile: Any) -> None:
+    """get_list() parses a composite list_id and returns the matching JiraList."""
+    jira_client_agile._agile_get.return_value = {"id": 42, "name": "Sprint Board"}
+
+    jira_list = jira_client_agile.get_list("42:todo")
+
+    assert isinstance(jira_list, JiraList)
+    assert jira_list.id == "42:todo"
+    assert jira_list.board_id == "42"
+    assert jira_list._status == Status.TODO
+
+
+def test_get_list_raises_on_malformed_id(jira_client_agile: Any) -> None:
+    """get_list() raises ValueError for ids without ':'."""
+    with pytest.raises(ValueError, match="Invalid list_id"):
+        jira_client_agile.get_list("no-colon-here")
+
+
+def test_get_list_raises_on_unknown_status(jira_client_agile: Any) -> None:
+    """get_list() raises ValueError when the status portion is not a valid Status."""
+    jira_client_agile._agile_get.return_value = {"id": 1, "name": "B"}
+
+    with pytest.raises(ValueError, match="Unknown status value"):
+        jira_client_agile.get_list("1:flying")
+
+
+def test_get_lists_yields_one_list_per_column(jira_client_agile: Any) -> None:
+    """get_lists() yields one JiraList per board column."""
+    jira_client_agile._agile_get.return_value = {"id": 5, "name": "The Board"}
+
+    lists = list(jira_client_agile.get_lists("5"))
+
+    assert len(lists) == 4  # TODO, IN_PROGRESS, COMPLETE, CANCELLED
+    assert all(isinstance(lst, JiraList) for lst in lists)
+    ids = [lst.id for lst in lists]
+    assert "5:todo" in ids
+    assert "5:in_progress" in ids
+
+
+def test_get_oauth_client_raises_on_missing_cloud_id() -> None:
+    """get_oauth_client() raises OSError when JIRA_CLOUD_ID is unset."""
+    env = {k: v for k, v in os.environ.items() if k != "JIRA_CLOUD_ID"}
+    with patch.dict(os.environ, env, clear=True):
+        with pytest.raises(OSError, match="JIRA_CLOUD_ID"):
+            get_oauth_client("some-token")
+
+
+def test_get_oauth_client_returns_client_when_env_set() -> None:
+    """get_oauth_client() returns a JiraClient when JIRA_CLOUD_ID is present."""
+    with patch.dict(os.environ, {"JIRA_CLOUD_ID": "test-cloud-id"}):
+        client = get_oauth_client("my-access-token")
+    assert isinstance(client, JiraClient)
