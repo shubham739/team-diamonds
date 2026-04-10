@@ -1,5 +1,5 @@
 ## Overview
-This package provides `JiraClient`, a concrete implementation of `IssueTrackerClient`, along with `JiraIssue`, the Jira-specific `Issue` implementation. It handles Jira-specific details such as Atlassian Document Format (ADF) for descriptions, the Transitions API for status changes, and JQL query construction for filtered searches.
+This package provides `JiraClient`, a concrete implementation of the external `api` client contract, along with `JiraIssue`, the Jira-specific `Issue` implementation. It handles Jira-specific details such as Atlassian Document Format (ADF) for descriptions, the Transitions API for status changes, and JQL query construction for filtered searches.
 
 ## Package Structure
 | File | Purpose |
@@ -32,7 +32,7 @@ The OAuth2 mode uses a different Jira API base URL (`https://api.atlassian.com/e
 ## Usage
 ```python
 from jira_client_impl import get_client, get_oauth_client
-from work_mgmt_client_interface.issue import IssueUpdate, Status
+from api.issue import Status
 
 # Basic Auth: Non-interactive (reads credentials from environment variables)
 client = get_client()
@@ -47,14 +47,14 @@ client = get_oauth_client(access_token="your_oauth_token_here")
 issue = client.get_issue("PROJ-42")
 
 # Search for issues (all filters are optional, combined with AND logic)
-for issue in client.get_issues(status=Status.IN_PROGRESS, assignee="dev@example.com"):
+for issue in client.get_issues(status=Status.IN_PROGRESS, members=["dev@example.com"]):
     print(issue)
 
 # Create an issue
-new_issue = client.create_issue(title="Fix login bug", status=Status.TODO)
+new_issue = client.create_issue(title="Fix login bug", status=Status.TO_DO)
 
 # Update an issue (only non-None fields are changed)
-updated = client.update_issue("PROJ-42", IssueUpdate(status=Status.COMPLETE))
+updated = client.update_issue("PROJ-42", status=Status.COMPLETED)
 
 # Delete an issue
 client.delete_issue("PROJ-42")
@@ -65,7 +65,7 @@ client.delete_issue("PROJ-42")
 
 **Descriptions.** Jira Cloud stores and returns descriptions in Atlassian Document Format (ADF). `JiraIssue` transparently extracts plain text from ADF on read, and `JiraClient` converts plain text strings to ADF on write.
 
-**Status normalization.** Jira-native status names (e.g. `"Done"`, `"Resolved"`, `"Closed"`) are normalized to the four standard `Status` enum values defined in the interface (`TODO`, `IN_PROGRESS`, `COMPLETE`, `CANCELLED`).
+**Status normalization.** Jira-native status names (e.g. `"Done"`, `"Resolved"`, `"Closed"`) are normalized to the `Status` enum values used by the external `api` contract (`TO_DO`, `IN_PROGRESS`, `COMPLETED`).
 
 **Search.** `get_issues()` builds a JQL query from the supplied filters and paginates through results automatically, stopping once `max_results` issues have been yielded.
 

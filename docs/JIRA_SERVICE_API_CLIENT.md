@@ -36,7 +36,7 @@ with JiraServiceClient(
     print(client.health())
 
     # List issues
-    issues = client.list_issues(status=Status.IN_PROGRESS, max_results=10)
+    issues = client.get_issues(status=Status.IN_PROGRESS, max_results=10)
     for issue in issues:
         print(issue.id, issue.title)
 
@@ -46,13 +46,13 @@ with JiraServiceClient(
     # Create an issue
     new_issue = client.create_issue(
         title="Fix the bug",
-        description="Details...",
-        status=Status.TODO,
-        assignee="dev@example.com",
+        desc="Details...",
+        status=Status.TO_DO,
+        members=["dev@example.com"],
     )
 
     # Update an issue
-    updated = client.update_issue("PROJ-42", title="Fixed the bug", status=Status.COMPLETE)
+    updated = client.update_issue("PROJ-42", title="Fixed the bug", status=Status.COMPLETED)
 
     # Delete an issue
     client.delete_issue("PROJ-42")
@@ -73,7 +73,7 @@ with JiraServiceClient(
 |--------|---------|-------------|
 | `health()` | `dict[str, str]` | `GET /health` — no auth |
 | `get_issue(issue_id)` | `IssueData` | `GET /issues/{id}` |
-| `list_issues(*, ...)` | `list[IssueData]` | `GET /issues` with optional filters |
+| `get_issues(*, ...)` | `list[IssueData]` | `GET /issues` with optional filters |
 | `create_issue(*, ...)` | `IssueData` | `POST /issues` |
 | `update_issue(issue_id, *, ...)` | `IssueData` | `PUT /issues/{id}` |
 | `delete_issue(issue_id)` | `None` | `DELETE /issues/{id}` |
@@ -85,9 +85,9 @@ with JiraServiceClient(
 class IssueData:
     id: str
     title: str
-    description: str
-    status: Status          # todo | in_progress | complete | cancelled
-    assignee: str | None
+    desc: str
+    status: Status          # to_do | in_progress | completed
+    members: list[str] | None
     due_date: str | None    # YYYY-MM-DD or None
 ```
 

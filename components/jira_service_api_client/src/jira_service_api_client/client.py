@@ -65,26 +65,26 @@ class JiraServiceClient:
         self._raise_for_status(response, issue_id=issue_id)
         return IssueData.from_dict(response.json())
 
-    def list_issues(
+    def get_issues(
         self,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
         max_results: int = 20,
     ) -> list[IssueData]:
-        """List issues with optional filters."""
+        """Get issues with optional filters."""
         params: dict[str, Any] = {"max_results": max_results}
         if title is not None:
             params["title"] = title
-        if description is not None:
-            params["description"] = description
+        if desc is not None:
+            params["desc"] = desc
         if status is not None:
             params["status"] = status.value
-        if assignee is not None:
-            params["assignee"] = assignee
+        if members is not None:
+            params["members"] = members
         if due_date is not None:
             params["due_date"] = due_date
 
@@ -97,23 +97,26 @@ class JiraServiceClient:
         self,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
+        board_id: str | None = None,
     ) -> IssueData:
         """Create a new issue."""
         params: dict[str, Any] = {}
         if title is not None:
             params["title"] = title
-        if description is not None:
-            params["description"] = description
+        if desc is not None:
+            params["desc"] = desc
         if status is not None:
             params["status"] = status.value
-        if assignee is not None:
-            params["assignee"] = assignee
+        if members is not None:
+            params["members"] = members
         if due_date is not None:
             params["due_date"] = due_date
+        if board_id is not None:
+            params["board_id"] = board_id
 
         response = self._http.post("/issues", params=params)
         self._raise_for_status(response)
@@ -124,23 +127,26 @@ class JiraServiceClient:
         issue_id: str,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
+        board_id: str | None = None,
     ) -> IssueData:
         """Update an existing issue."""
         params: dict[str, Any] = {}
         if title is not None:
             params["title"] = title
-        if description is not None:
-            params["description"] = description
+        if desc is not None:
+            params["desc"] = desc
         if status is not None:
             params["status"] = status.value
-        if assignee is not None:
-            params["assignee"] = assignee
+        if members is not None:
+            params["members"] = members
         if due_date is not None:
             params["due_date"] = due_date
+        if board_id is not None:
+            params["board_id"] = board_id
 
         response = self._http.put(f"/issues/{issue_id}", params=params)
         self._raise_for_status(response, issue_id=issue_id)

@@ -68,9 +68,9 @@ In both paths, the FastAPI dependency `get_jira_client` selects the appropriate 
 ```json
 {
   "title": "string",
-  "description": "string",
-  "status": "todo | in_progress | complete | cancelled",
-  "assignee": "user@example.com",
+  "desc": "string",
+  "status": "to_do | in_progress | completed",
+  "members": ["user@example.com"],
   "due_date": "YYYY-MM-DD"
 }
 ```

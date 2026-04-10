@@ -34,7 +34,7 @@ feels seamless, regardless of which platforms your team uses.
 ## Repository Structure
 
 - components/
-    - work_mgmt_client_interface/                                  # Vendor-neutral interfaces and shared domain models.
+    - api (external dependency)                                    # Vendor-neutral interfaces and shared domain models.
     - jira_client_impl/                                           # Direct Jira client implementation (local/library path).
     - jira_service/                                               # FastAPI service exposing Jira operations over HTTP.
     - jira_service_api_client/                                    # Typed HTTP client for the service API.
@@ -60,7 +60,7 @@ The project uses a layered architecture for location transparency:
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
-| 1 | `work-mgmt-client-interface` | Abstract contract — defines what a client does |
+| 1 | `api` | External contract package — defines what a client does |
 | 2 | `jira-client-impl` | Local Jira implementation — calls Jira REST API directly |
 | 3 | `jira-service` | FastAPI service — exposes layer 2 over HTTP |
 | 4 | `jira-service-api-client` | Type-safe HTTP client for the FastAPI service |

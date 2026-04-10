@@ -73,6 +73,23 @@ class Issue(ABC):
         """Return the due date, or None if not set."""
         raise NotImplementedError
 
+    @abstractmethod
+    def update(self, update: "IssueUpdate") -> None:
+        """Apply a partial update to this issue in-place.
+
+        Only fields explicitly set to a non-None value in *update* should be
+        changed; all other fields remain as-is.
+
+        Args:
+            update: An IssueUpdate instance carrying the desired changes.
+
+        Raises:
+            NotImplementedError: If the concrete implementation does not support
+                                  in-place mutation via the Issue object.
+
+        """
+        raise NotImplementedError
+
     # equivalent to Javas .toString()
     def __repr__(self) -> str:
         """Perform operation similar to Java .toString()."""

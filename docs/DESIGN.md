@@ -11,11 +11,11 @@ In the latest update, the local library is complemented by a deployable FastAPI 
 ## Architecture Overview
 
 ```
-work-mgmt-client-interface/       # Abstract contracts only (IssueTrackerClient ABC)
+api (external package)            # Abstract contracts only (client ABCs and domain models)
 jira-client-impl/                 # Jira-specific local library (calls Jira REST API directly)
 jira-service/                     # FastAPI service (wraps jira-client-impl over HTTP)
 jira-service-api-client/          # Type-safe HTTP client for the FastAPI service
-jira-service-adapter/             # Adapter: implements IssueTrackerClient via the service client
+jira-service-adapter/             # Adapter: implements the api client contract via the service client
 ```
 
 ### Option 1 — Local Library
@@ -37,7 +37,7 @@ main.py
                       └─ Jira REST API
 ```
 
-The consumer (`main.py`) calls `get_client()` from either `jira_client_impl` or `jira_service_adapter`. Because both implement `IssueTrackerClient`, the rest of the code is identical.
+The consumer (`main.py`) calls `get_client()` from either `jira_client_impl` or `jira_service_adapter`. Because both implement the same `api` client contract, the rest of the code is identical.
 
 ---
 
@@ -108,10 +108,11 @@ from jira_service_adapter import get_client      # remote only
 
 **With the adapter (both options behind the same interface):**
 ```python
-from work_mgmt_client_interface.client import IssueTrackerClient
+from api.client import Client
+from api.issue import Status
 
-def do_work(client: IssueTrackerClient) -> None:
-    for issue in client.get_issues(status=Status.TODO):
+def do_work(client: Client) -> None:
+  for issue in client.get_issues(status=Status.TO_DO):
         print(issue.title)
 
 # Inject either — no change to do_work
@@ -119,7 +120,7 @@ do_work(jira_client_impl.get_client())       # local
 do_work(jira_service_adapter.get_client())   # remote
 ```
 
-`JiraServiceAdapter` implements `IssueTrackerClient` and delegates each method to `JiraServiceClient`, translating domain types (`Status`) to their service equivalents and mapping `ServiceIssueNotFoundError` back to `IssueNotFoundError`.
+`JiraServiceAdapter` implements the `api` client contract and delegates each method to `JiraServiceClient`, translating domain types (`Status`) to their service equivalents and mapping `ServiceIssueNotFoundError` back to `IssueNotFoundError`.
 
 ---
 
@@ -127,7 +128,7 @@ do_work(jira_service_adapter.get_client())   # remote
 
 | Layer | Test type | What is tested |
 |---|---|---|
-| `work_mgmt_client_interface` | Unit | Interface contracts, `IssueUpdate.set_fields()` |
+| `api` | Unit | External interface contracts consumed by implementation layers |
 | `jira_client_impl` | Unit | JQL builder, status mapping, ADF conversion; mocked HTTP |
 | `jira_service` | Unit + Integration | FastAPI endpoints with `TestClient`; OAuth flow mocked |
 | `jira_service_api_client` | Unit | `IssueData.from_dict`, error mapping |
@@ -148,8 +149,8 @@ Integration tests run with -m "integration and not local_credentials", so tests 
 
 ## Key Design Decisions
 
-### Partial updates via `IssueUpdate`
-Updates are expressed as a dataclass where every field defaults to `None`. Only fields explicitly set to a non-`None` value are sent to the API, avoiding accidental overwrites.
+### Partial updates via keyword fields
+Updates are expressed as optional keyword fields (`title`, `desc`, `members`, `due_date`, `status`, `board_id`). Only fields explicitly provided are sent to the API, avoiding accidental overwrites.
 
 ### Iterator return for `get_issues()`
 The interface returns `Iterator[Issue]` so callers can consume results as a stream without needing list semantics.
@@ -196,7 +197,7 @@ To add support for a new issue tracker:
 
 1. Create a new package (e.g. `trello-client-impl`).
 2. Implement `Issue` (subclass the ABC, provide all properties).
-3. Implement `IssueTrackerClient` (subclass the ABC, implement all methods).
+3. Implement the `api` client contract (subclass the ABC, implement all methods).
 4. Implement `get_client()`, returning your concrete client.
 5. Map the platform's native statuses to the four `Status` enum values.
 6. Export `get_client` from `__init__.py`.
