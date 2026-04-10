@@ -847,7 +847,7 @@ def test_get_lists_yields_one_list_per_column(jira_client_agile: Any) -> None:
 
     lists = list(jira_client_agile.get_lists("5"))
 
-    assert len(lists) == 4  # TODO, IN_PROGRESS, COMPLETE, CANCELLED
+    assert len(lists) == 4  # TO_DO, IN_PROGRESS, COMPLETE, CANCELLED
     assert all(isinstance(lst, JiraList) for lst in lists)
     ids = [lst.id for lst in lists]
     assert "5:todo" in ids
