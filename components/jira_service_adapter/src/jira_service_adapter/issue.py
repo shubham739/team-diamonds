@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from work_mgmt_client_interface.issue import Issue, Status
+from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
 
 if TYPE_CHECKING:
     from jira_service_api_client.models import IssueData
@@ -56,3 +56,7 @@ class ServiceIssue(Issue):
     def due_date(self) -> str | None:
         """Return the due date or None."""
         return self._data.due_date
+
+    def update(self, update: IssueUpdate) -> None:
+        """Not supported on ServiceIssue — use JiraServiceAdapter.update_issue() instead."""
+        raise NotImplementedError

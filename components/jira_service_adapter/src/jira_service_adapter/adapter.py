@@ -13,7 +13,9 @@ from work_mgmt_client_interface.client import IssueNotFoundError, IssueTrackerCl
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from work_mgmt_client_interface.board import Board
     from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
+    from work_mgmt_client_interface.list import List
 
 
 def _to_service_status(status: Status) -> ServiceStatus:
@@ -173,6 +175,27 @@ class JiraServiceAdapter(IssueTrackerClient):
             self._client.delete_issue(issue_id)
         except ServiceIssueNotFoundError as exc:
             raise IssueNotFoundError(str(exc)) from exc
+
+
+    # ------------------------------------------------------------------
+    # Board and List access — not yet exposed by the HTTP service
+    # ------------------------------------------------------------------
+
+    def get_board(self, board_id: str) -> Board:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_boards(self) -> Iterator[Board]:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_list(self, list_id: str) -> List:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_lists(self, board_id: str) -> Iterator[List]:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
 
 
 def get_client(*, interactive: bool = False) -> JiraServiceAdapter:  # noqa: ARG001

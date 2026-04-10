@@ -51,7 +51,7 @@ class JiraBoard(Board):
 
         Returns Issue objects (your JiraIssue adapter) by reusing JiraClient.build_issue().
         """
-        data = self._client._get(  # noqa: SLF001
+        data = self._client._agile_get(  # noqa: SLF001
             f"/board/{self._board_id}/issue",
             params={"fields": "summary,description,status,assignee,duedate"},
         )
@@ -92,7 +92,5 @@ class JiraBoard(Board):
         return self._client.update_issue(issue_id, update)
 
     def delete_issue(self, issue_id: str) -> None:
-        """Delete an issue from the board (not yet implemented in JiraClient)."""
-        # TODO: Implement delete_issue in JiraClient when the API endpoint is available # noqa: FIX002, TD003, TD002
-        msg = "delete_issue is not yet implemented"
-        raise NotImplementedError(msg)
+        """Delete an issue from the board by delegating to JiraClient."""
+        self._client.delete_issue(issue_id)
