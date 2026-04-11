@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Adapter that implements IssueTrackerClient over the Jira FastAPI service"
 requires-python = ">=3.12"
 dependencies = [
-    "work-mgmt-client-interface",
+    "ospd-issue-tracker-api",
     "jira-service-api-client",
 ]
 
@@ -22,7 +22,7 @@ test = [
 packages = ["src/jira_service_adapter"]
 
 [tool.uv.sources]
-work-mgmt-client-interface = {workspace = true}
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
 jira-service-api-client = {workspace = true}
 
 [tool.coverage.report]
