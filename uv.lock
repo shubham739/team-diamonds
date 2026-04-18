@@ -611,14 +611,20 @@ provides-extras = ["test"]
 
 [[package]]
 name = "jira-service-api-client"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "components/jira_service_api_client" }
 dependencies = [
+    { name = "attrs" },
     { name = "httpx" },
+    { name = "python-dateutil" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "httpx", specifier = ">=0.27.0" }]
+requires-dist = [
+    { name = "attrs", specifier = ">=22.2.0" },
+    { name = "httpx", specifier = ">=0.23.0,<0.29.0" },
+    { name = "python-dateutil", specifier = ">=2.8.0" },
+]
 
 [[package]]
 name = "librt"

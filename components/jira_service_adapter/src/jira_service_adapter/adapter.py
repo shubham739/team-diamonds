@@ -3,21 +3,43 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from http import HTTPStatus
+from typing import TYPE_CHECKING, Any
 
 from jira_service_adapter.issue import ServiceIssue
-from jira_service_api_client.client import JiraServiceClient, ServiceIssueNotFoundError
-from jira_service_api_client.models import Status as ServiceStatus
+from jira_service_api_client.api.default import (
+    create_issue_issues_post,
+    delete_issue_issues_issue_id_delete,
+    get_issue_issues_issue_id_get,
+    list_issues_issues_get,
+    update_issue_issues_issue_id_put,
+)
+from jira_service_api_client.client import AuthenticatedClient
+from jira_service_api_client.models import CreateIssueRequest, UpdateIssueRequest
+from jira_service_api_client.models.status import Status as ServiceStatus
 from work_mgmt_client_interface.client import IssueNotFoundError, IssueTrackerClient
+from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
+    from work_mgmt_client_interface.issue import Issue
+
+
+class ServiceClientError(Exception):
+    """Raised when the service returns an unexpected non-404 error."""
+
+
+_TO_SERVICE_STATUS: dict[Status, ServiceStatus] = {
+    Status.TODO: ServiceStatus.TO_DO,
+    Status.IN_PROGRESS: ServiceStatus.IN_PROGRESS,
+    Status.COMPLETE: ServiceStatus.COMPLETED,
+    Status.CANCELLED: ServiceStatus.TO_DO,  # No direct equivalent; fall back to TO_DO
+}
 
 
 def _to_service_status(status: Status) -> ServiceStatus:
-    return ServiceStatus(status.value)
+    return _TO_SERVICE_STATUS[status]
 
 
 class JiraServiceAdapter(IssueTrackerClient):
@@ -29,12 +51,12 @@ class JiraServiceAdapter(IssueTrackerClient):
     calling the Jira API directly.
 
     Args:
-        http_client: A configured JiraServiceClient pointing at the running service.
+        http_client: A configured AuthenticatedClient pointing at the running service.
 
     """
 
-    def __init__(self, http_client: JiraServiceClient) -> None:
-        """Initialise with an HTTP client for the Jira service."""
+    def __init__(self, http_client: AuthenticatedClient) -> None:
+        """Initialise with an authenticated HTTP client for the Jira service."""
         self._client = http_client
 
     # ------------------------------------------------------------------
@@ -54,10 +76,15 @@ class JiraServiceAdapter(IssueTrackerClient):
             IssueNotFoundError: If the service returns 404.
 
         """
-        try:
-            data = self._client.get_issue(issue_id)
-        except ServiceIssueNotFoundError as exc:
-            raise IssueNotFoundError(str(exc)) from exc
+        resp = get_issue_issues_issue_id_get.sync_detailed(issue_id, client=self._client)
+        if resp.status_code == HTTPStatus.NOT_FOUND:
+            msg = f"Issue {issue_id} not found"
+            raise IssueNotFoundError(msg)
+        if resp.status_code != HTTPStatus.OK:
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
+        assert resp.parsed is not None
+        data: dict[str, Any] = resp.parsed.additional_properties
         return ServiceIssue(data)
 
     def get_issues(
@@ -76,7 +103,7 @@ class JiraServiceAdapter(IssueTrackerClient):
             title: Filter by title substring.
             description: Filter by description substring.
             status: Filter by status.
-            assignee: Filter by assignee.
+            assignee: Filter by assignee email.
             due_date: Filter by due date.
             max_results: Maximum number of issues to return.
 
@@ -85,15 +112,22 @@ class JiraServiceAdapter(IssueTrackerClient):
 
         """
         service_status = _to_service_status(status) if status is not None else None
-        items = self._client.list_issues(
+        members = [assignee] if assignee is not None else None
+        resp = list_issues_issues_get.sync_detailed(
+            client=self._client,
             title=title,
-            description=description,
+            desc=description,
             status=service_status,
-            assignee=assignee,
+            members=members,
             due_date=due_date,
             max_results=max_results,
         )
-        yield from (ServiceIssue(item) for item in items)
+        if resp.status_code != HTTPStatus.OK:
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
+        assert resp.parsed is not None
+        issues: list[dict[str, Any]] = resp.parsed.additional_properties.get("issues", [])
+        yield from (ServiceIssue(item) for item in issues)
 
     def create_issue(
         self,
@@ -110,7 +144,7 @@ class JiraServiceAdapter(IssueTrackerClient):
             title: Issue title.
             description: Issue description.
             status: Initial status.
-            assignee: Assignee.
+            assignee: Assignee email.
             due_date: Due date string.
 
         Returns:
@@ -118,13 +152,20 @@ class JiraServiceAdapter(IssueTrackerClient):
 
         """
         service_status = _to_service_status(status) if status is not None else None
-        data = self._client.create_issue(
+        members = [assignee] if assignee is not None else None
+        body = CreateIssueRequest(
             title=title,
-            description=description,
+            desc=description,
             status=service_status,
-            assignee=assignee,
+            members=members,
             due_date=due_date,
         )
+        resp = create_issue_issues_post.sync_detailed(client=self._client, body=body)
+        if resp.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
+        assert resp.parsed is not None
+        data: dict[str, Any] = resp.parsed.additional_properties
         return ServiceIssue(data)
 
     def update_issue(self, issue_id: str, update: IssueUpdate) -> Issue:
@@ -145,18 +186,21 @@ class JiraServiceAdapter(IssueTrackerClient):
         service_status: ServiceStatus | None = None
         if "status" in changed:
             service_status = _to_service_status(changed["status"])
-
-        try:
-            data = self._client.update_issue(
-                issue_id,
-                title=changed.get("title"),
-                description=changed.get("description"),
-                status=service_status,
-                assignee=changed.get("assignee"),
-                due_date=changed.get("due_date"),
-            )
-        except ServiceIssueNotFoundError as exc:
-            raise IssueNotFoundError(str(exc)) from exc
+        body = UpdateIssueRequest(
+            title=changed.get("title"),
+            desc=changed.get("description"),
+            status=service_status,
+            due_date=changed.get("due_date"),
+        )
+        resp = update_issue_issues_issue_id_put.sync_detailed(issue_id, client=self._client, body=body)
+        if resp.status_code == HTTPStatus.NOT_FOUND:
+            msg = f"Issue {issue_id} not found"
+            raise IssueNotFoundError(msg)
+        if resp.status_code != HTTPStatus.OK:
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
+        assert resp.parsed is not None
+        data: dict[str, Any] = resp.parsed.additional_properties
         return ServiceIssue(data)
 
     def delete_issue(self, issue_id: str) -> None:
@@ -169,10 +213,13 @@ class JiraServiceAdapter(IssueTrackerClient):
             IssueNotFoundError: If the issue does not exist.
 
         """
-        try:
-            self._client.delete_issue(issue_id)
-        except ServiceIssueNotFoundError as exc:
-            raise IssueNotFoundError(str(exc)) from exc
+        resp = delete_issue_issues_issue_id_delete.sync_detailed(issue_id, client=self._client)
+        if resp.status_code == HTTPStatus.NOT_FOUND:
+            msg = f"Issue {issue_id} not found"
+            raise IssueNotFoundError(msg)
+        if resp.status_code != HTTPStatus.OK:
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
 
 
 def get_client(*, interactive: bool = False) -> JiraServiceAdapter:  # noqa: ARG001
@@ -207,5 +254,5 @@ def get_client(*, interactive: bool = False) -> JiraServiceAdapter:  # noqa: ARG
         msg = f"Missing required environment variables: {', '.join(missing)}"
         raise OSError(msg)
 
-    http_client = JiraServiceClient(base_url=base_url, access_token=access_token)
+    http_client = AuthenticatedClient(base_url=base_url, token=access_token)
     return JiraServiceAdapter(http_client)

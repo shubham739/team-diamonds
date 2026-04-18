@@ -45,7 +45,7 @@ members = [
 line-length = 130
 target-version = "py312"
 #main.py is being used for development and debugging and does not need to be checked by a strict ruff
-extend-exclude = ["main.py"] 
+extend-exclude = ["main.py", "components/jira_service_api_client"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -75,7 +75,7 @@ mypy_path = [
     "components/work_mgmt_client_interface/src",
     "components/jira_client_impl/src",
     "components/jira_service/src",
-    "components/jira_service_api_client/src",
+    "components/jira_service_api_client",
     "components/jira_service_adapter/src",
 ]
 ignore_missing_imports = false
@@ -92,7 +92,7 @@ pythonpath = [
     "components/work_mgmt_client_interface/src",
     "components/jira_client_impl/src",
     "components/jira_service/src",
-    "components/jira_service_api_client/src",
+    "components/jira_service_api_client",
     "components/jira_service_adapter/src",
 ]
 testpaths = ["tests", "components/*/tests"]
@@ -108,7 +108,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["components"]
-omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*"]
+omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*", "components/jira_service_api_client/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.
