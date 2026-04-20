@@ -14,7 +14,6 @@ members = [
     "jira-service-adapter",
     "jira-service-api-client",
     "team-diamonds",
-    "work-mgmt-client-interface",
 ]
 
 [[package]]
@@ -530,9 +529,9 @@ name = "jira-client-impl"
 version = "0.1.0"
 source = { editable = "components/jira_client_impl" }
 dependencies = [
+    { name = "ospd-issue-tracker-api" },
     { name = "python-dotenv" },
     { name = "requests" },
-    { name = "work-mgmt-client-interface" },
 ]
 
 [package.optional-dependencies]
@@ -543,11 +542,11 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "requests" },
-    { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["test"]
 
@@ -557,11 +556,12 @@ version = "0.1.0"
 source = { editable = "components/jira_service" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "jira-client-impl" },
+    { name = "ospd-issue-tracker-api" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "work-mgmt-client-interface" },
 ]
 
 [package.optional-dependencies]
@@ -574,14 +574,15 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.100.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
     { name = "jira-client-impl", editable = "components/jira_client_impl" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
-    { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["test"]
 
@@ -591,7 +592,7 @@ version = "0.1.0"
 source = { editable = "components/jira_service_adapter" }
 dependencies = [
     { name = "jira-service-api-client" },
-    { name = "work-mgmt-client-interface" },
+    { name = "ospd-issue-tracker-api" },
 ]
 
 [package.optional-dependencies]
@@ -603,22 +604,28 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "jira-service-api-client", editable = "components/jira_service_api_client" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
-    { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["test"]
 
 [[package]]
 name = "jira-service-api-client"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "components/jira_service_api_client" }
 dependencies = [
+    { name = "attrs" },
     { name = "httpx" },
+    { name = "python-dateutil" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "httpx", specifier = ">=0.27.0" }]
+requires-dist = [
+    { name = "attrs", specifier = ">=22.2.0" },
+    { name = "httpx", specifier = ">=0.23.0,<0.29.0" },
+    { name = "python-dateutil", specifier = ">=2.8.0" },
+]
 
 [[package]]
 name = "librt"
@@ -970,6 +977,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/98/3c/03b6a9f8a056c748e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ba/a0/99db160a52ee98302c9e231d33afce350386eb2b6ee21de2b329f7bd4286/openapi_python_client-0.28.3-py3-none-any.whl", hash = "sha256:fbb29976a3d0fcea2822fdd7504b7437825dd4f075f2412dd234882c4a56d469", size = 183193, upload-time = "2026-03-05T23:45:11.458Z" },
 ]
+
+[[package]]
+name = "ospd-issue-tracker-api"
+version = "0.1.0"
+source = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main#5fde7fe514b7082ae28340c27a21fd7d22c42481" }
 
 [[package]]
 name = "packaging"
@@ -1486,10 +1498,10 @@ dependencies = [
     { name = "jira-service-adapter" },
     { name = "jira-service-api-client" },
     { name = "mangum" },
+    { name = "ospd-issue-tracker-api" },
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "work-mgmt-client-interface" },
 ]
 
 [package.optional-dependencies]
@@ -1521,6 +1533,7 @@ requires-dist = [
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=1.16.12" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17.0" },
     { name = "openapi-python-client", marker = "extra == 'dev'", specifier = ">=0.21.0" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
     { name = "pymdown-extensions", marker = "extra == 'dev'", specifier = ">=10.16.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
@@ -1529,7 +1542,6 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.7" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.4.20250611" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
-    { name = "work-mgmt-client-interface", editable = "components/work_mgmt_client_interface" },
 ]
 provides-extras = ["dev"]
 
@@ -1784,8 +1796,3 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/3e/28135a24e384493fa804216b79a6a6759a38cc4ff59118787b9fb693df93/websockets-16.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b14dc141ed6d2dde437cddb216004bcac6a1df0935d79656387bd41632ba0bbd", size = 178531, upload-time = "2026-01-10T09:23:35.016Z" },
     { url = "https://files.pythonhosted.org/packages/6f/28/258ebab549c2bf3e64d2b0217b973467394a9cea8c42f70418ca2c5d0d2e/websockets-16.0-py3-none-any.whl", hash = "sha256:1637db62fad1dc833276dded54215f2c7fa46912301a24bd94d45d46a011ceec", size = 171598, upload-time = "2026-01-10T09:23:45.395Z" },
 ]
-
-[[package]]
-name = "work-mgmt-client-interface"
-version = "0.1.0"
-source = { editable = "components/work_mgmt_client_interface" }
