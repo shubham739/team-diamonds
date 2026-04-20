@@ -9,6 +9,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "chat-to-issues-integration",
     "jira-client-impl",
     "jira-service",
     "jira-service-adapter",
@@ -144,6 +145,34 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/5f/6b8f83a55bb8278772c5ae54a577f3099025f9ade59d0136ac24a0df4bde/charset_normalizer-3.4.4-cp314-cp314-win_arm64.whl", hash = "sha256:de00632ca48df9daf77a2c65a484531649261ec9f25489917f09e455cb09ddb2", size = 100743, upload-time = "2025-10-14T04:41:52.122Z" },
     { url = "https://files.pythonhosted.org/packages/0a/4c/925909008ed5a988ccbb72dcc897407e5d6d3bd72410d69e051fc0c14647/charset_normalizer-3.4.4-py3-none-any.whl", hash = "sha256:7a32c560861a02ff789ad905a2fe94e3f840803362c84fecf1851cb4cf3dc37f", size = 53402, upload-time = "2025-10-14T04:42:31.76Z" },
 ]
+
+[[package]]
+name = "chat-to-issues-integration"
+version = "0.1.0"
+source = { editable = "components/chat_to_issues_integration" }
+dependencies = [
+    { name = "jira-service-adapter" },
+    { name = "ospd-issue-tracker-api" },
+    { name = "python-dotenv" },
+    { name = "slack-sdk" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jira-service-adapter", editable = "components/jira_service_adapter" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "slack-sdk", specifier = ">=3.27.0" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "click"
@@ -1466,6 +1495,15 @@ wheels = [
 ]
 
 [[package]]
+name = "slack-sdk"
+version = "3.41.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/35/fc009118a13187dd9731657c60138e5a7c2dea88681a7f04dc406af5da7d/slack_sdk-3.41.0.tar.gz", hash = "sha256:eb61eb12a65bebeca9cb5d36b3f799e836ed2be21b456d15df2627cfe34076ca", size = 250568, upload-time = "2026-03-12T16:10:11.381Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/df/2e4be347ff98281b505cc0ccf141408cdd25eb5ca9f3830deb361b2472d3/slack_sdk-3.41.0-py2.py3-none-any.whl", hash = "sha256:bb18dcdfff1413ec448e759cf807ec3324090993d8ab9111c74081623b692a89", size = 313885, upload-time = "2026-03-12T16:10:09.811Z" },
+]
+
+[[package]]
 name = "starlette"
 version = "0.52.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1483,6 +1521,7 @@ name = "team-diamonds"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "chat-to-issues-integration" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "jira-client-impl" },
@@ -1512,6 +1551,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "chat-to-issues-integration", editable = "components/chat_to_issues_integration" },
     { name = "fastapi" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.27.0" },

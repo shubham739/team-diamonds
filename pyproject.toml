@@ -11,6 +11,7 @@ dependencies = [
     "jira-service",
     "jira-service-api-client",
     "jira-service-adapter",
+    "chat-to-issues-integration",
     "fastapi[standard]>=0.100.0",
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
@@ -38,6 +39,7 @@ members = [
     "components/jira_service",
     "components/jira_service_api_client",
     "components/jira_service_adapter",
+    "components/chat_to_issues_integration",
 ]
 
 [tool.uv.sources]
@@ -46,6 +48,7 @@ jira-client-impl = {workspace = true}
 jira-service = {workspace = true}
 jira-service-api-client = {workspace = true}
 jira-service-adapter = {workspace = true}
+chat-to-issues-integration = {workspace = true}
 
 [tool.ruff]
 line-length = 130
@@ -60,7 +63,7 @@ ignore = [
   "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
   "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117"] }
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117"], "**/demo.py" = ["T201", "INP001", "D400", "D415"] }
 
 [tool.ruff.lint.isort]
 known-first-party = [
@@ -68,6 +71,7 @@ known-first-party = [
     "jira_service",
     "jira_service_api_client",
     "jira_service_adapter",
+    "chat_to_issues_integration",
 ]
 
 [tool.ruff.lint.pylint]
@@ -82,6 +86,7 @@ mypy_path = [
     "components/jira_service/src",
     "components/jira_service_api_client/src",
     "components/jira_service_adapter/src",
+    "components/chat_to_issues_integration/src",
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
@@ -103,6 +108,7 @@ pythonpath = [
     "components/jira_service/src",
     "components/jira_service_api_client/src",
     "components/jira_service_adapter/src",
+    "components/chat_to_issues_integration/src",
 ]
 testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]

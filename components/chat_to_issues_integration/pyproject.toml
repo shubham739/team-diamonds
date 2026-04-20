@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chat-to-issues-integration"
+version = "0.1.0"
+description = "Integration app wiring a chat vertical (Slack) with the issue tracker vertical (Jira)"
+requires-python = ">=3.12"
+dependencies = [
+    "ospd-issue-tracker-api",
+    "jira-service-adapter",
+    "slack-sdk>=3.27.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.14.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chat_to_issues_integration"]
+
+[tool.uv.sources]
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
+jira-service-adapter = { workspace = true }
