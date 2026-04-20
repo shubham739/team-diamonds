@@ -176,7 +176,6 @@ class JiraServiceAdapter(IssueTrackerClient):
         except ServiceIssueNotFoundError as exc:
             raise IssueNotFoundError(str(exc)) from exc
 
-
     # ------------------------------------------------------------------
     # Board and List access — not yet exposed by the HTTP service
     # ------------------------------------------------------------------

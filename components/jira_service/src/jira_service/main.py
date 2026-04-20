@@ -1,5 +1,6 @@
 """FastAPI server with Jira OAuth2 authentication and work management endpoints."""
 
+import json
 import logging
 import os
 import secrets
@@ -23,6 +24,7 @@ from jira_service.auth import (
     user_sessions,
 )
 from jira_service.exceptions import ClientInitializationError
+from jira_service.openrouter_client import JIRA_TOOLS, OpenRouterClient, OpenRouterError, get_openrouter_client
 from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
 from work_mgmt_client_interface.client import IssueTrackerClient
 from work_mgmt_client_interface.issue import IssueUpdate, Status
@@ -82,6 +84,12 @@ class UpdateIssueRequest(BaseModel):
     status: Status | None = None
     assignee: str | None = None
     due_date: str | None = None
+
+
+class ChatRequest(BaseModel):
+    """Request body for the AI chat endpoint."""
+
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -457,3 +465,135 @@ def delete_issue(
         raise HTTPException(status_code=500, detail="Unexpected error while deleting the issue") from e
     logger.info("Deleted issue %s", issue_id)
     return {"status": "deleted", "issue_id": issue_id}
+
+
+# ---------------------------------------------------------------------------
+# Chat Endpoint (AI value-add — all /issues endpoints remain fully accessible)
+# ---------------------------------------------------------------------------
+
+_CHAT_SYSTEM_PROMPT = (
+    "You are a helpful Jira assistant. Use the provided tools to help users manage their Jira issues. "
+    "Summarize information clearly and confirm any actions you take."
+)
+
+
+def _execute_tool(name: str, args: dict[str, Any], client: IssueTrackerClient) -> Any:  # noqa: ANN401
+    """Dispatch a single LLM tool call to the Jira client and return a JSON-serialisable result."""
+    if name == "list_issues":
+        status_val: str | None = args.get("status")
+        issues = list(
+            client.get_issues(
+                title=args.get("title"),
+                description=args.get("description"),
+                status=Status(status_val) if status_val else None,
+                assignee=args.get("assignee"),
+                due_date=args.get("due_date"),
+                max_results=int(args.get("max_results", 20)),
+            )
+        )
+        return [_issue_to_dict(i) for i in issues]
+
+    if name == "get_issue":
+        return _issue_to_dict(client.get_issue(args["issue_id"]))
+
+    if name == "create_issue":
+        status_val = args.get("status")
+        issue = client.create_issue(
+            title=args.get("title"),
+            description=args.get("description"),
+            status=Status(status_val) if status_val else None,
+            assignee=args.get("assignee"),
+            due_date=args.get("due_date"),
+        )
+        return _issue_to_dict(issue)
+
+    if name == "update_issue":
+        status_val = args.get("status")
+        update = IssueUpdate(
+            title=args.get("title"),
+            description=args.get("description"),
+            status=Status(status_val) if status_val else None,
+            assignee=args.get("assignee"),
+            due_date=args.get("due_date"),
+        )
+        return _issue_to_dict(client.update_issue(args["issue_id"], update))
+
+    if name == "delete_issue":
+        client.delete_issue(args["issue_id"])
+        return {"status": "deleted", "issue_id": args["issue_id"]}
+
+    raise ValueError(f"Unknown tool: {name!r}")
+
+
+def _run_chat_loop(
+    user_message: str,
+    jira_client: IssueTrackerClient,
+    openrouter: OpenRouterClient,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Run the agentic tool-use loop and return (reply_text, actions_taken)."""
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": _CHAT_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+    actions: list[dict[str, Any]] = []
+
+    for _ in range(3):
+        response = openrouter.complete(messages, tools=JIRA_TOOLS)
+        choice = response["choices"][0]
+        assistant_message: dict[str, Any] = choice["message"]
+        messages.append(assistant_message)
+
+        if choice.get("finish_reason") != "tool_calls" or not assistant_message.get("tool_calls"):
+            return assistant_message.get("content") or "Done.", actions
+
+        for tool_call in assistant_message["tool_calls"]:
+            tool_name: str = tool_call["function"]["name"]
+            tool_args: dict[str, Any] = json.loads(tool_call["function"]["arguments"])
+            try:
+                result = _execute_tool(tool_name, tool_args, jira_client)
+            except Exception as exc:
+                result = {"error": str(exc)}
+            actions.append({"tool": tool_name, "args": tool_args, "result": result})
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "content": json.dumps(result),
+            })
+
+    return "I was unable to complete the request within the allowed steps.", actions
+
+
+@app.post("/chat")
+def chat(
+    body: ChatRequest,
+    client: Annotated[IssueTrackerClient, Depends(get_jira_client)],
+    openrouter: Annotated[OpenRouterClient, Depends(get_openrouter_client)],
+) -> dict[str, Any]:
+    """Natural-language Jira assistant powered by OpenRouter.
+
+    The LLM interprets the user's message and calls Jira tools as needed.
+    All existing /issues endpoints remain fully accessible alongside this endpoint.
+
+    Args:
+        body: Chat request containing a ``message`` field.
+        client: Jira client (injected).
+        openrouter: OpenRouter LLM client (injected).
+
+    Returns:
+        ``{"reply": str, "actions": list}`` — the assistant's response and
+        the list of Jira tool calls that were executed.
+
+    Raises:
+        HTTPException 502: If OpenRouter returns an error.
+        HTTPException 500: On unexpected errors.
+
+    """
+    try:
+        reply, actions = _run_chat_loop(body.message, client, openrouter)
+        return {"reply": reply, "actions": actions}
+    except OpenRouterError as e:
+        logger.error("OpenRouter error: %s", e)
+        raise HTTPException(status_code=502, detail=f"OpenRouter error: {e}") from e
+    except Exception as e:
+        logger.exception("Unexpected error in /chat")
+        raise HTTPException(status_code=500, detail="Unexpected error in chat") from e
