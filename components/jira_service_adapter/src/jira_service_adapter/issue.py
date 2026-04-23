@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
+from api.issue import Issue, Status
 
 if TYPE_CHECKING:
     from jira_service_api_client.models import IssueData
@@ -12,10 +12,10 @@ if TYPE_CHECKING:
 
 
 def _map_status(service_status: ServiceStatus) -> Status:
-    return Status(service_status.value)
+    return service_status
 
 
-class ServiceIssue(Issue):
+class ServiceIssue(Issue):  # type: ignore[misc]
     """Issue implementation that wraps a remote service response.
 
     Args:
@@ -38,9 +38,9 @@ class ServiceIssue(Issue):
         return self._data.title
 
     @property
-    def description(self) -> str:
+    def desc(self) -> str:
         """Return the issue description."""
-        return self._data.description
+        return self._data.desc
 
     @property
     def status(self) -> Status:
@@ -48,15 +48,19 @@ class ServiceIssue(Issue):
         return _map_status(self._data.status)
 
     @property
-    def assignee(self) -> str | None:
-        """Return the assignee or None."""
-        return self._data.assignee
+    def members(self) -> list[str] | None:
+        """Return the assigned members or None."""
+        return self._data.members
 
     @property
     def due_date(self) -> str | None:
         """Return the due date or None."""
         return self._data.due_date
 
-    def update(self, update: IssueUpdate) -> None:
-        """Not supported on ServiceIssue — use JiraServiceAdapter.update_issue() instead."""
+    @property
+    def board_id(self) -> str:
+        """Return the board id.
+
+        The current service payload does not expose board identity.
+        """
         raise NotImplementedError

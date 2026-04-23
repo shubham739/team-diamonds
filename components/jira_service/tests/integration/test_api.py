@@ -16,12 +16,12 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from api.issue import Status
 from fastapi.testclient import TestClient
 
 from jira_service.ai_client_api import OpenRouterError, get_openrouter_client
+from jira_client_impl.jira_impl import IssueNotFoundError
 from jira_service.main import app, get_jira_client
-from work_mgmt_client_interface.client import IssueNotFoundError
-from work_mgmt_client_interface.issue import Status
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -39,18 +39,18 @@ _AUTH_HEADER = {"Authorization": f"Bearer {_FAKE_TOKEN}"}
 def _make_mock_issue(
     issue_id: str = "TD-1",
     title: str = "Test issue",
-    description: str = "A description",
-    status: Status = Status.TODO,
-    assignee: str | None = None,
+    desc: str = "A description",
+    status: Status = Status.TO_DO,
+    members: list[str] | None = None,
     due_date: str | None = None,
 ) -> MagicMock:
     """Return a MagicMock that behaves like an Issue."""
     issue = MagicMock()
     issue.id = issue_id
     issue.title = title
-    issue.description = description
+    issue.desc = desc
     issue.status = status
-    issue.assignee = assignee
+    issue.members = members
     issue.due_date = due_date
     return issue
 
@@ -275,7 +275,7 @@ class TestCreateIssue:
         response = api_client.post(
             "/issues",
             headers=_AUTH_HEADER,
-            json={"title": "New issue", "description": "Details"},
+            json={"title": "New issue", "desc": "Details"},
         )
         assert response.status_code == 201
         assert response.json()["id"] == "TD-10"
@@ -287,16 +287,18 @@ class TestCreateIssue:
             headers=_AUTH_HEADER,
             json={
                 "title": "T",
-                "description": "D",
+                "desc": "D",
                 "status": "in_progress",
-                "assignee": "bob@example.com",
+                "members": ["bob@example.com"],
                 "due_date": "2026-12-31",
+                "board_id": "BOARD-1",
             },
         )
         call_kwargs = mock_jira_client.create_issue.call_args.kwargs
         assert call_kwargs["title"] == "T"
         assert call_kwargs["status"] == Status.IN_PROGRESS
-        assert call_kwargs["assignee"] == "bob@example.com"
+        assert call_kwargs["members"] == ["bob@example.com"]
+        assert call_kwargs["board_id"] == "BOARD-1"
 
 
 # ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ dependencies = [
     "httpx>=0.27.0",
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
-    "work-mgmt-client-interface",
+    "ospd-issue-tracker-api",
     "jira-client-impl",
 ]
 
@@ -28,7 +28,7 @@ test = [
 packages = ["src/jira_service"]
 
 [tool.uv.sources]
-work-mgmt-client-interface = {workspace = true}
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
 jira-client-impl = {workspace = true}
 
 [tool.coverage.report]

@@ -36,17 +36,17 @@ _TOKEN = "test-token"
 def _issue_payload(
     issue_id: str = "TD-1",
     title: str = "Test issue",
-    description: str = "A description",
+    desc: str = "A description",
     status: str = "todo",
-    assignee: str | None = None,
+    members: list[str] | None = None,
     due_date: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": issue_id,
         "title": title,
-        "description": description,
+        "desc": desc,
         "status": status,
-        "assignee": assignee,
+        "members": members,
         "due_date": due_date,
     }
 
@@ -74,39 +74,46 @@ class TestIssueDataFromDict:
         data = _issue_payload(
             issue_id="TD-42",
             title="My bug",
-            description="Details here",
+            desc="Details here",
             status="in_progress",
-            assignee="alice@example.com",
+            members=["alice@example.com"],
             due_date="2026-12-31",
         )
         issue = IssueData.from_dict(data)
         assert issue.id == "TD-42"
         assert issue.title == "My bug"
-        assert issue.description == "Details here"
+        assert issue.desc == "Details here"
         assert issue.status == Status.IN_PROGRESS
-        assert issue.assignee == "alice@example.com"
+        assert issue.members == ["alice@example.com"]
         assert issue.due_date == "2026-12-31"
 
     def test_optional_fields_default_none(self) -> None:
         issue = IssueData.from_dict(_issue_payload())
-        assert issue.assignee is None
+        assert issue.members is None
         assert issue.due_date is None
 
     def test_all_status_values(self) -> None:
         for raw, expected in [
-            ("todo", Status.TODO),
+            ("todo", Status.TO_DO),
+            ("to_do", Status.TO_DO),
             ("in_progress", Status.IN_PROGRESS),
-            ("complete", Status.COMPLETE),
-            ("cancelled", Status.CANCELLED),
+            ("complete", Status.COMPLETED),
+            ("completed", Status.COMPLETED),
+            ("cancelled", Status.COMPLETED),
         ]:
             issue = IssueData.from_dict(_issue_payload(status=raw))
             assert issue.status == expected
 
     def test_missing_optional_keys_do_not_raise(self) -> None:
-        minimal = {"id": "TD-1", "title": "t", "description": "d", "status": "todo"}
+        minimal = {"id": "TD-1", "title": "t", "desc": "d", "status": "todo"}
         issue = IssueData.from_dict(minimal)
-        assert issue.assignee is None
+        assert issue.members is None
         assert issue.due_date is None
+
+    def test_legacy_keys_are_still_accepted(self) -> None:
+        issue = IssueData.from_dict({"id": "TD-1", "title": "t", "description": "d", "status": "todo", "assignee": "a@b.com"})
+        assert issue.desc == "d"
+        assert issue.members == ["a@b.com"]
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +206,7 @@ class TestGetIssue:
 
 
 # ---------------------------------------------------------------------------
-# JiraServiceClient.list_issues
+# JiraServiceClient.get_issues
 # ---------------------------------------------------------------------------
 
 
@@ -211,24 +218,26 @@ class TestListIssues:
     def test_returns_list_of_issue_data(self, client: JiraServiceClient) -> None:
         body = {"issues": [_issue_payload("TD-1"), _issue_payload("TD-2")], "count": 2}
         with patch.object(client._http, "get", return_value=_make_response(200, body)):
-            result = client.list_issues()
+            result = client.get_issues()
         assert len(result) == 2
         assert all(isinstance(i, IssueData) for i in result)
 
     def test_empty_list(self, client: JiraServiceClient) -> None:
         body = {"issues": [], "count": 0}
         with patch.object(client._http, "get", return_value=_make_response(200, body)):
-            result = client.list_issues()
+            result = client.get_issues()
         assert result == []
 
     def test_passes_filters_as_query_params(self, client: JiraServiceClient) -> None:
         body = {"issues": [], "count": 0}
         mock_get = MagicMock(return_value=_make_response(200, body))
         with patch.object(client._http, "get", mock_get):
-            client.list_issues(title="bug", status=Status.IN_PROGRESS, max_results=5)
+            client.get_issues(title="bug", desc="text", members=["alice@example.com"], status=Status.IN_PROGRESS, max_results=5)
         _, call_kwargs = mock_get.call_args
         params: dict[str, Any] = call_kwargs.get("params", {})
         assert params["title"] == "bug"
+        assert params["desc"] == "text"
+        assert params["members"] == ["alice@example.com"]
         assert params["status"] == "in_progress"
         assert params["max_results"] == 5
 
@@ -236,7 +245,7 @@ class TestListIssues:
         body = {"issues": [], "count": 0}
         mock_get = MagicMock(return_value=_make_response(200, body))
         with patch.object(client._http, "get", mock_get):
-            client.list_issues()
+            client.get_issues()
         _, call_kwargs = mock_get.call_args
         params: dict[str, Any] = call_kwargs.get("params", {})
         assert "title" not in params
@@ -266,16 +275,19 @@ class TestCreateIssue:
         with patch.object(client._http, "post", mock_post):
             client.create_issue(
                 title="T",
-                description="D",
+                desc="D",
                 status=Status.IN_PROGRESS,
-                assignee="bob@example.com",
+                members=["bob@example.com"],
                 due_date="2026-01-01",
+                board_id="BOARD-1",
             )
         _, call_kwargs = mock_post.call_args
         params: dict[str, Any] = call_kwargs.get("params", {})
         assert params["title"] == "T"
+        assert params["desc"] == "D"
         assert params["status"] == "in_progress"
-        assert params["assignee"] == "bob@example.com"
+        assert params["members"] == ["bob@example.com"]
+        assert params["board_id"] == "BOARD-1"
 
     def test_500_raises_client_error(self, client: JiraServiceClient) -> None:
         with patch.object(client._http, "post", return_value=_make_response(500, text="err")):
@@ -312,8 +324,19 @@ class TestUpdateIssue:
         _, call_kwargs = mock_put.call_args
         params: dict[str, Any] = call_kwargs.get("params", {})
         assert params["title"] == "only-title"
-        assert "description" not in params
+        assert "desc" not in params
         assert "status" not in params
+
+    def test_update_passes_new_fields(self, client: JiraServiceClient) -> None:
+        payload = _issue_payload()
+        mock_put = MagicMock(return_value=_make_response(200, payload))
+        with patch.object(client._http, "put", mock_put):
+            client.update_issue("TD-1", desc="D", members=["bob@example.com"], board_id="BOARD-1")
+        _, call_kwargs = mock_put.call_args
+        params: dict[str, Any] = call_kwargs.get("params", {})
+        assert params["desc"] == "D"
+        assert params["members"] == ["bob@example.com"]
+        assert params["board_id"] == "BOARD-1"
 
 
 # ---------------------------------------------------------------------------

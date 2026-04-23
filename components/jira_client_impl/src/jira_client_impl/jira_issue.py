@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
+from api.issue import Issue, Status
 
 if TYPE_CHECKING:
     from jira_client_impl.jira_impl import JiraClient
@@ -16,36 +16,35 @@ if TYPE_CHECKING:
 # to clean user's input into a standardized status that is used across all implementations
 _JIRA_STATUS_MAP: dict[str, Status] = {
     # to do
-    "to do": Status.TODO,
-    "open": Status.TODO,
-    "backlog": Status.TODO,
-    "new": Status.TODO,
+    "to do": Status.TO_DO,
+    "open": Status.TO_DO,
+    "backlog": Status.TO_DO,
+    "new": Status.TO_DO,
     # in progress
     "in progress": Status.IN_PROGRESS,
     "working": Status.IN_PROGRESS,
     "development": Status.IN_PROGRESS,
     # done
-    "complete": Status.COMPLETE,
-    "done": Status.COMPLETE,
-    "closed": Status.COMPLETE,
-    "resolved": Status.COMPLETE,
-    # cancelled
-    "cancelled": Status.CANCELLED,
-    "canceled": Status.CANCELLED,
-    "rejected": Status.CANCELLED,
+    "complete": Status.COMPLETED,
+    "done": Status.COMPLETED,
+    "closed": Status.COMPLETED,
+    "resolved": Status.COMPLETED,
+    "cancelled": Status.COMPLETED,
+    "canceled": Status.COMPLETED,
+    "rejected": Status.COMPLETED,
 }
 
 
 def _normalize_status(jira_status: str | None) -> Status:
     if not jira_status:
-        return Status.TODO
-    return _JIRA_STATUS_MAP.get(jira_status.lower(), Status.TODO)
+        return Status.TO_DO
+    return _JIRA_STATUS_MAP.get(jira_status.lower(), Status.TO_DO)
 
 
 # ------------------------------------------------------------------
 # Issue implementation
 # ------------------------------------------------------------------
-class JiraIssue(Issue):
+class JiraIssue(Issue):  # type: ignore[misc]
     """Concrete Issue backed by a Jira issue API response.
 
     Construct via the module-level ``get_issue()`` factory rather than
@@ -88,7 +87,7 @@ class JiraIssue(Issue):
         # Need to cast the string as a string so that mypy believes that the string strings.
 
     @property
-    def description(self) -> str:
+    def desc(self) -> str:
         """Extract description from ADF format."""
         # Jira Cloud returns description as Atlassian Document Format (ADF).
         # So description must be extracted from adf format
@@ -101,26 +100,55 @@ class JiraIssue(Issue):
         return _extract_adf_text(desc)
 
     @property
+    def description(self) -> str:
+        """Backward-compatible alias for desc."""
+        return self.desc
+
+    @property
     def status(self) -> Status:
         """Return status."""
         status_name: str = self._raw.get("status", {}).get("name", "") if isinstance(self._raw.get("status"), dict) else ""
         return _normalize_status(status_name)
 
     @property
-    def assignee(self) -> str | None:
-        """Return name to task assignee."""
+    def members(self) -> list[str] | None:
+        """Return the assigned members."""
         assignee = self._raw.get("assignee")
         if not assignee:
             return None
         # Prefer email, fall back to displayName
-        return assignee.get("emailAddress") or assignee.get("displayName") or None
+        primary = assignee.get("emailAddress") or assignee.get("displayName") or None
+        return [primary] if primary else None
+
+    @property
+    def assignee(self) -> str | None:
+        """Backward-compatible alias for the primary member."""
+        members = self.members
+        return members[0] if members else None
+
+    @property
+    def board_id(self) -> str:
+        """Return the associated board identifier when available."""
+        project = self._raw.get("project")
+        if isinstance(project, dict):
+            return str(project.get("id") or project.get("key") or "")
+        return ""
 
     @property
     def due_date(self) -> str | None:
         """Return due date."""
         return self._raw.get("duedate") or None
 
-    def update(self, update: IssueUpdate) -> None:
+    def update(
+        self,
+        *,
+        title: str | None = None,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status | None = None,
+        board_id: str | None = None,
+    ) -> None:
         """Apply a partial update to this issue via the Jira API.
 
         Delegates to ``JiraClient.update_issue()``.  Requires that this
@@ -128,7 +156,12 @@ class JiraIssue(Issue):
         automatically when issues are fetched via ``JiraClient``).
 
         Args:
-            update: An IssueUpdate carrying the desired field changes.
+            title: Updated title.
+            desc: Updated description.
+            members: Updated members.
+            due_date: Updated due date.
+            status: Updated status.
+            board_id: Updated board identifier.
 
         Raises:
             NotImplementedError: If this issue was constructed without a
@@ -138,7 +171,15 @@ class JiraIssue(Issue):
         if self._client is None:
             msg = "This JiraIssue has no client reference; call JiraClient.update_issue() directly."
             raise NotImplementedError(msg)
-        self._client.update_issue(self._id, update)
+        self._client.update_issue(
+            self._id,
+            title=title,
+            desc=desc,
+            members=members,
+            due_date=due_date,
+            status=status,
+            board_id=board_id,
+        )
 
 
 # ---------------------------------------------------------------------------

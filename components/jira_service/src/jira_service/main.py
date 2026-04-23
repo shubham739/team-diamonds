@@ -14,6 +14,7 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from pydantic import BaseModel
 
 from jira_client_impl import get_client, get_oauth_client
+from jira_client_impl.jira_impl import IssueNotFoundError as BaseIssueNotFoundError
 from jira_service.auth import (
     AuthenticationError,
     exchange_code_for_token,
@@ -25,9 +26,9 @@ from jira_service.auth import (
 )
 from jira_service.exceptions import ClientInitializationError
 from jira_service.ai_client_api import JIRA_TOOLS, OpenRouterClient, OpenRouterError, get_openrouter_client
-from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
-from work_mgmt_client_interface.client import IssueTrackerClient
-from work_mgmt_client_interface.issue import IssueUpdate, Status
+from api.issue import Status
+
+IssueTrackerClient = Any
 
 # Loading .env from inside .venv for local development
 env_path = Path(__file__).parent / ".env"
@@ -70,20 +71,22 @@ class CreateIssueRequest(BaseModel):
     """Request body for creating a new issue."""
 
     title: str | None = None
-    description: str | None = None
+    desc: str | None = None
     status: Status | None = None
-    assignee: str | None = None
+    members: list[str] | None = None
     due_date: str | None = None
+    board_id: str | None = None
 
 
 class UpdateIssueRequest(BaseModel):
     """Request body for updating an existing issue."""
 
     title: str | None = None
-    description: str | None = None
+    desc: str | None = None
     status: Status | None = None
-    assignee: str | None = None
+    members: list[str] | None = None
     due_date: str | None = None
+    board_id: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -239,9 +242,9 @@ def _issue_to_dict(issue: Any) -> dict[str, Any]:  # noqa: ANN401
     return {
         "id": issue.id,
         "title": issue.title,
-        "description": issue.description,
+        "desc": issue.desc,
         "status": str(issue.status),
-        "assignee": issue.assignee,
+        "members": issue.members,
         "due_date": issue.due_date,
     }
 
@@ -309,9 +312,9 @@ def get_issue(
 def list_issues(
     client: Annotated[IssueTrackerClient, Depends(get_jira_client)],
     title: Annotated[str | None, Query()] = None,
-    description: Annotated[str | None, Query()] = None,
+    desc: Annotated[str | None, Query()] = None,
     status: Annotated[Status | None, Query()] = None,
-    assignee: Annotated[str | None, Query()] = None,
+    members: Annotated[list[str] | None, Query()] = None,
     due_date: Annotated[str | None, Query()] = None,
     max_results: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict[str, Any]:
@@ -320,9 +323,9 @@ def list_issues(
     Args:
         client: Jira client instance (injected).
         title: Filter by title substring.
-        description: Filter by description substring.
+        desc: Filter by description substring.
         status: Filter by status.
-        assignee: Filter by assignee email.
+        members: Filter by member email.
         due_date: Filter by due date (YYYY-MM-DD).
         max_results: Maximum number of results to return (1–100).
 
@@ -339,9 +342,9 @@ def list_issues(
             _issue_to_dict(issue)
             for issue in client.get_issues(
                 title=title,
-                description=description,
+                desc=desc,
                 status=status,
-                assignee=assignee,
+                members=members,
                 due_date=due_date,
                 max_results=max_results,
             )
@@ -364,7 +367,7 @@ def create_issue(
     The request body (JSON) maps to the fields of a new Jira issue.
 
     Args:
-        body: Issue fields (title, description, status, assignee, due_date).
+        body: Issue fields (title, desc, status, members, due_date, board_id).
         client: Jira client instance (injected).
 
     Returns:
@@ -378,10 +381,11 @@ def create_issue(
     try:
         issue = client.create_issue(
             title=body.title,
-            description=body.description,
+            desc=body.desc,
             status=body.status,
-            assignee=body.assignee,
+            members=body.members,
             due_date=body.due_date,
+            board_id=body.board_id,
         )
         logger.info("Created issue %s", issue.id)
         return _issue_to_dict(issue)
@@ -401,7 +405,7 @@ def update_issue(
     """Update an existing issue.
 
     Only the fields present in the JSON body are updated; omitted fields are
-    left unchanged (partial update semantics via IssueUpdate).
+    left unchanged.
 
     Args:
         issue_id: Jira issue key.
@@ -418,14 +422,15 @@ def update_issue(
 
     """
     try:
-        update = IssueUpdate(
+        issue = client.update_issue(
+            issue_id,
             title=body.title,
-            description=body.description,
+            desc=body.desc,
             status=body.status,
-            assignee=body.assignee,
+            members=body.members,
             due_date=body.due_date,
+            board_id=body.board_id,
         )
-        issue = client.update_issue(issue_id, update)
         logger.info("Updated issue %s", issue_id)
         return _issue_to_dict(issue)
     except BaseIssueNotFoundError as e:
