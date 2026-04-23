@@ -5,13 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from work_mgmt_client_interface.list import List
-
 from jira_client_impl.jira_board import JiraBoard
 
 if TYPE_CHECKING:
-    from work_mgmt_client_interface.issue import Issue, Status
-
     from jira_client_impl.jira_impl import JiraClient
 
 
