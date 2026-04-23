@@ -7,14 +7,14 @@ from typing import Any
 from api.issue import Issue, Status
 
 _STATUS_MAP: dict[str, Status] = {
-    "to_do": Status.TODO,
+    "to_do": Status.TO_DO,
     "in_progress": Status.IN_PROGRESS,
-    "completed": Status.COMPLETE,
+    "completed": Status.COMPLETED,
 }
 
 
-def _map_status(service_status: ServiceStatus) -> Status:
-    return service_status
+def _map_status(service_status: str) -> Status:
+    return _STATUS_MAP[service_status]
 
 
 class ServiceIssue(Issue):  # type: ignore[misc]
@@ -42,7 +42,7 @@ class ServiceIssue(Issue):  # type: ignore[misc]
     @property
     def desc(self) -> str:
         """Return the issue description."""
-        return self._data.desc
+        return str(self._data["desc"])
 
     @property
     def status(self) -> Status:
@@ -52,12 +52,12 @@ class ServiceIssue(Issue):  # type: ignore[misc]
     @property
     def members(self) -> list[str] | None:
         """Return the assigned members or None."""
-        return self._data.members
+        return self._data.get("members")
 
     @property
     def due_date(self) -> str | None:
         """Return the due date or None."""
-        return self._data.due_date
+        return self._data.get("due_date")
 
     @property
     def board_id(self) -> str:

@@ -20,7 +20,7 @@ from api.issue import Status
 from fastapi.testclient import TestClient
 
 from jira_client_impl.jira_impl import IssueNotFoundError
-from jira_service.ai_client_api import OpenRouterError, get_openrouter_client
+from jira_service.ai_client_api import OpenRouterClient, OpenRouterError, get_openrouter_client
 from jira_service.main import app, get_jira_client
 
 if TYPE_CHECKING:
@@ -188,6 +188,11 @@ class TestRoot:
         response = client.get("/")
         assert response.status_code == 401
 
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.get_issues.side_effect = RuntimeError("boom")
+        response = api_client.get("/", headers=_AUTH_HEADER)
+        assert response.status_code == 500
+
     def test_returns_issues(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
         mock_jira_client.get_issues.return_value = iter([_make_mock_issue("TD-1", "Bug")])
         response = api_client.get("/", headers=_AUTH_HEADER)
@@ -233,6 +238,11 @@ class TestListIssues:
         response = api_client.get("/issues", headers=_AUTH_HEADER, params={"max_results": 0})
         assert response.status_code == 422
 
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.get_issues.side_effect = RuntimeError("boom")
+        response = api_client.get("/issues", headers=_AUTH_HEADER)
+        assert response.status_code == 500
+
 
 # ---------------------------------------------------------------------------
 # GET /issues/{issue_id}
@@ -257,6 +267,11 @@ class TestGetIssue:
         response = api_client.get("/issues/TD-999", headers=_AUTH_HEADER)
         assert response.status_code == 404
         assert "TD-999" in response.json()["detail"]
+
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.get_issue.side_effect = RuntimeError("boom")
+        response = api_client.get("/issues/TD-1", headers=_AUTH_HEADER)
+        assert response.status_code == 500
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +315,11 @@ class TestCreateIssue:
         assert call_kwargs["members"] == ["bob@example.com"]
         assert call_kwargs["board_id"] == "BOARD-1"
 
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.create_issue.side_effect = RuntimeError("boom")
+        response = api_client.post("/issues", headers=_AUTH_HEADER, json={"title": "x"})
+        assert response.status_code == 500
+
 
 # ---------------------------------------------------------------------------
 # PUT /issues/{issue_id}
@@ -327,6 +347,11 @@ class TestUpdateIssue:
         response = api_client.put("/issues/TD-999", headers=_AUTH_HEADER, json={"title": "x"})
         assert response.status_code == 404
 
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.update_issue.side_effect = RuntimeError("boom")
+        response = api_client.put("/issues/TD-1", headers=_AUTH_HEADER, json={"title": "x"})
+        assert response.status_code == 500
+
 
 # ---------------------------------------------------------------------------
 # DELETE /issues/{issue_id}
@@ -349,6 +374,11 @@ class TestDeleteIssue:
         mock_jira_client.delete_issue.side_effect = IssueNotFoundError("not found")
         response = api_client.delete("/issues/TD-999", headers=_AUTH_HEADER)
         assert response.status_code == 404
+
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.delete_issue.side_effect = RuntimeError("boom")
+        response = api_client.delete("/issues/TD-1", headers=_AUTH_HEADER)
+        assert response.status_code == 500
 
 
 # ---------------------------------------------------------------------------
@@ -431,6 +461,26 @@ class TestChat:
             assert "OpenRouter" in response.json()["detail"]
         finally:
             app.dependency_overrides.pop(get_openrouter_client, None)
+
+    def test_returns_500_on_unexpected_error(self, api_client: TestClient) -> None:
+        mock_or = MagicMock()
+        mock_or.complete.side_effect = RuntimeError("boom")
+        app.dependency_overrides[get_openrouter_client] = lambda: mock_or
+        try:
+            response = api_client.post("/chat", headers=_AUTH_HEADER, json={"message": "hello"})
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.pop(get_openrouter_client, None)
+
+
+class TestOpenRouterClient:
+    def test_init_and_close(self) -> None:
+        client = OpenRouterClient("test-key")
+        client.close()
+
+    def test_context_manager(self) -> None:
+        with OpenRouterClient("test-key"):
+            pass
 
 
 class TestDocs:

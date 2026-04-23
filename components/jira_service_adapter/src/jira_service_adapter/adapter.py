@@ -6,10 +6,9 @@ import os
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
+from api.issue import Status
+
 from jira_service_adapter.issue import ServiceIssue
-<<<<<<< ours
-from jira_service_api_client.client import JiraServiceClient, ServiceIssueNotFoundError
-=======
 from jira_service_api_client.api.default import (
     create_issue_issues_post,
     delete_issue_issues_issue_id_delete,
@@ -20,26 +19,12 @@ from jira_service_api_client.api.default import (
 from jira_service_api_client.client import AuthenticatedClient
 from jira_service_api_client.models import CreateIssueRequest, UpdateIssueRequest
 from jira_service_api_client.models.status import Status as ServiceStatus
-from work_mgmt_client_interface.client import IssueNotFoundError, IssueTrackerClient
-from work_mgmt_client_interface.issue import IssueUpdate, Status
->>>>>>> theirs
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-<<<<<<< ours
     from api.board import Board
-    from api.issue import Issue, Status
-
-    from jira_service_api_client.models import Status as ServiceStatus
-
-
-
-def _to_service_status(status: Status) -> ServiceStatus:
-    return status
-
-=======
-    from work_mgmt_client_interface.issue import Issue
+    from api.issue import Issue
 
 
 class ServiceClientError(Exception):
@@ -47,16 +32,15 @@ class ServiceClientError(Exception):
 
 
 _TO_SERVICE_STATUS: dict[Status, ServiceStatus] = {
-    Status.TODO: ServiceStatus.TO_DO,
+    Status.TO_DO: ServiceStatus.TO_DO,
     Status.IN_PROGRESS: ServiceStatus.IN_PROGRESS,
-    Status.COMPLETE: ServiceStatus.COMPLETED,
-    Status.CANCELLED: ServiceStatus.TO_DO,  # No direct equivalent; fall back to TO_DO
+    Status.COMPLETED: ServiceStatus.COMPLETED,
 }
 
 
 def _to_service_status(status: Status) -> ServiceStatus:
     return _TO_SERVICE_STATUS[status]
->>>>>>> theirs
+
 
 class IssueNotFoundError(Exception):
     """Raised when an issue cannot be found via the service adapter."""
@@ -123,11 +107,7 @@ class JiraServiceAdapter:
             title: Filter by title substring.
             desc: Filter by description substring.
             status: Filter by status.
-<<<<<<< ours
             members: Filter by members.
-=======
-            assignee: Filter by assignee email.
->>>>>>> theirs
             due_date: Filter by due date.
             max_results: Maximum number of issues to return.
 
@@ -136,17 +116,10 @@ class JiraServiceAdapter:
 
         """
         service_status = _to_service_status(status) if status is not None else None
-<<<<<<< ours
-        items = self._client.get_issues(
-            title=title,
-            desc=desc,
-=======
-        members = [assignee] if assignee is not None else None
         resp = list_issues_issues_get.sync_detailed(
             client=self._client,
             title=title,
-            desc=description,
->>>>>>> theirs
+            desc=desc,
             status=service_status,
             members=members,
             due_date=due_date,
@@ -175,11 +148,7 @@ class JiraServiceAdapter:
             title: Issue title.
             desc: Issue description.
             status: Initial status.
-<<<<<<< ours
             members: Assigned members.
-=======
-            assignee: Assignee email.
->>>>>>> theirs
             due_date: Due date string.
             board_id: Board identifier.
 
@@ -188,14 +157,9 @@ class JiraServiceAdapter:
 
         """
         service_status = _to_service_status(status) if status is not None else None
-        members = [assignee] if assignee is not None else None
         body = CreateIssueRequest(
             title=title,
-<<<<<<< ours
             desc=desc,
-=======
-            desc=description,
->>>>>>> theirs
             status=service_status,
             members=members,
             due_date=due_date,
@@ -238,31 +202,14 @@ class JiraServiceAdapter:
             IssueNotFoundError: If the issue does not exist.
 
         """
-<<<<<<< ours
         service_status = _to_service_status(status) if status is not None else None
-
-        try:
-            data = self._client.update_issue(
-                issue_id,
-                title=title,
-                desc=desc,
-                status=service_status,
-                members=members,
-                due_date=due_date,
-                board_id=board_id,
-            )
-        except ServiceIssueNotFoundError as exc:
-            raise IssueNotFoundError(str(exc)) from exc
-=======
-        changed = update.set_fields()
-        service_status: ServiceStatus | None = None
-        if "status" in changed:
-            service_status = _to_service_status(changed["status"])
         body = UpdateIssueRequest(
-            title=changed.get("title"),
-            desc=changed.get("description"),
+            title=title,
+            desc=desc,
             status=service_status,
-            due_date=changed.get("due_date"),
+            members=members,
+            due_date=due_date,
+            board_id=board_id,
         )
         resp = update_issue_issues_issue_id_put.sync_detailed(issue_id, client=self._client, body=body)
         if resp.status_code == HTTPStatus.NOT_FOUND:
@@ -273,7 +220,6 @@ class JiraServiceAdapter:
             raise ServiceClientError(msg)
         assert resp.parsed is not None
         data: dict[str, Any] = resp.parsed.additional_properties
->>>>>>> theirs
         return ServiceIssue(data)
 
     def delete_issue(self, issue_id: str) -> None:
@@ -294,7 +240,6 @@ class JiraServiceAdapter:
             msg = f"Service error {resp.status_code}"
             raise ServiceClientError(msg)
 
-
     # ------------------------------------------------------------------
     # Board and List access — not yet exposed by the HTTP service
     # ------------------------------------------------------------------
@@ -306,6 +251,7 @@ class JiraServiceAdapter:
     def get_boards(self) -> Iterator[Board]:
         """Not yet implemented for the remote service adapter."""
         raise NotImplementedError
+
 
 def get_client(*, interactive: bool = False) -> JiraServiceAdapter:  # noqa: ARG001
     """Create a JiraServiceAdapter from environment variables.
