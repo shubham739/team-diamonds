@@ -77,7 +77,7 @@ class TestMainScriptStructure:
         """main.py must have valid Python syntax."""
         if not MAIN_SCRIPT.exists():
             pytest.skip("main.py not found.")
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [sys.executable, "-m", "py_compile", str(MAIN_SCRIPT)],
             capture_output=True,
             text=True,
