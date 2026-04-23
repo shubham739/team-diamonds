@@ -24,7 +24,7 @@ from jira_service.auth import (
     user_sessions,
 )
 from jira_service.exceptions import ClientInitializationError
-from jira_service.openrouter_client import JIRA_TOOLS, OpenRouterClient, OpenRouterError, get_openrouter_client
+from jira_service.ai_client_api import JIRA_TOOLS, OpenRouterClient, OpenRouterError, get_openrouter_client
 from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
 from work_mgmt_client_interface.client import IssueTrackerClient
 from work_mgmt_client_interface.issue import IssueUpdate, Status

@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from jira_service.main import app, get_jira_client
-from jira_service.openrouter_client import OpenRouterError, get_openrouter_client
+from jira_service.ai_client_api import OpenRouterError, get_openrouter_client
 from work_mgmt_client_interface.client import IssueNotFoundError
 from work_mgmt_client_interface.issue import Status
 
