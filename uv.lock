@@ -9,7 +9,11 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "chat-to-issues-integration",
     "jira-client-impl",
+    "jira-service",
+    "jira-service-adapter",
+    "jira-service-api-client",
     "jira-service",
     "jira-service-adapter",
     "jira-service-api-client",
@@ -50,9 +54,13 @@ wheels = [
 [[package]]
 name = "attrs"
 version = "26.1.0"
+name = "attrs"
+version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
     { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
 ]
 
@@ -144,6 +152,34 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/5f/6b8f83a55bb8278772c5ae54a577f3099025f9ade59d0136ac24a0df4bde/charset_normalizer-3.4.4-cp314-cp314-win_arm64.whl", hash = "sha256:de00632ca48df9daf77a2c65a484531649261ec9f25489917f09e455cb09ddb2", size = 100743, upload-time = "2025-10-14T04:41:52.122Z" },
     { url = "https://files.pythonhosted.org/packages/0a/4c/925909008ed5a988ccbb72dcc897407e5d6d3bd72410d69e051fc0c14647/charset_normalizer-3.4.4-py3-none-any.whl", hash = "sha256:7a32c560861a02ff789ad905a2fe94e3f840803362c84fecf1851cb4cf3dc37f", size = 53402, upload-time = "2025-10-14T04:42:31.76Z" },
 ]
+
+[[package]]
+name = "chat-to-issues-integration"
+version = "0.1.0"
+source = { editable = "components/chat_to_issues_integration" }
+dependencies = [
+    { name = "jira-service-adapter" },
+    { name = "ospd-issue-tracker-api" },
+    { name = "python-dotenv" },
+    { name = "slack-sdk" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jira-service-adapter", editable = "components/jira_service_adapter" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "slack-sdk", specifier = ">=3.27.0" },
+]
+provides-extras = ["test"]
 
 [[package]]
 name = "click"
@@ -543,12 +579,90 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.10.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "requests" },
 ]
 provides-extras = ["test"]
+
+[[package]]
+name = "jira-service"
+version = "0.1.0"
+source = { editable = "components/jira_service" }
+dependencies = [
+    { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
+    { name = "jira-client-impl" },
+    { name = "ospd-issue-tracker-api" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.100.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
+    { name = "jira-client-impl", editable = "components/jira_client_impl" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "requests", specifier = ">=2.31.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
+]
+provides-extras = ["test"]
+
+[[package]]
+name = "jira-service-adapter"
+version = "0.1.0"
+source = { editable = "components/jira_service_adapter" }
+dependencies = [
+    { name = "jira-service-api-client" },
+    { name = "ospd-issue-tracker-api" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+    { name = "pytest-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jira-service-api-client", editable = "components/jira_service_api_client" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
+]
+provides-extras = ["test"]
+
+[[package]]
+name = "jira-service-api-client"
+version = "0.1.0"
+source = { editable = "components/jira_service_api_client" }
+dependencies = [
+    { name = "attrs" },
+    { name = "httpx" },
+    { name = "python-dateutil" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "attrs", specifier = ">=22.2.0" },
+    { name = "httpx", specifier = ">=0.23.0,<0.29.0" },
+    { name = "python-dateutil", specifier = ">=2.8.0" },
+]
 
 [[package]]
 name = "jira-service"
@@ -685,6 +799,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/eb/7697f60fbe7042ab4e88f4ee6af496b7f222fffb0a4e3593ef1f29f81652/librt-0.8.1-cp314-cp314t-win32.whl", hash = "sha256:738f08021b3142c2918c03692608baed43bc51144c29e35807682f8070ee2a3a", size = 51328, upload-time = "2026-02-17T16:12:45.148Z" },
     { url = "https://files.pythonhosted.org/packages/7c/72/34bf2eb7a15414a23e5e70ecb9440c1d3179f393d9349338a91e2781c0fb/librt-0.8.1-cp314-cp314t-win_amd64.whl", hash = "sha256:89815a22daf9c51884fb5dbe4f1ef65ee6a146e0b6a8df05f753e2e4a9359bf4", size = 58722, upload-time = "2026-02-17T16:12:46.85Z" },
     { url = "https://files.pythonhosted.org/packages/b2/c8/d148e041732d631fc76036f8b30fae4e77b027a1e95b7a84bb522481a940/librt-0.8.1-cp314-cp314t-win_arm64.whl", hash = "sha256:bf512a71a23504ed08103a13c941f763db13fb11177beb3d9244c98c29fb4a61", size = 48755, upload-time = "2026-02-17T16:12:47.943Z" },
+]
+
+[[package]]
+name = "mangum"
+version = "0.21.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/89/cb/d9f4d685a0b8eceac10991e15ac471d9568e4e42c2489ae9bf072828c1c2/mangum-0.21.0.tar.gz", hash = "sha256:e31ed72d67f9958fa4379f65df77729906dec6dfa00afa6ed4e06c77833000de", size = 89130, upload-time = "2026-02-01T17:17:42.816Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/50/e3c694b8e122551e4557450219283771334dee2ed5734a8398c8b8018c50/mangum-0.21.0-py3-none-any.whl", hash = "sha256:309e48f5c629542516c5106ecf079f4ec08809ed50df882238d98fe1392820c7", size = 17146, upload-time = "2026-02-01T17:17:41.553Z" },
 ]
 
 [[package]]
@@ -956,6 +1082,32 @@ sdist = { url = "https://files.pythonhosted.org/packages/a2/6e/371856a3fb9d31ca8
 wheels = [
     { url = "https://files.pythonhosted.org/packages/79/7b/2c79738432f5c924bef5071f933bcc9efd0473bac3b4aa584a6f7c1c8df8/mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505", size = 4963, upload-time = "2025-04-22T14:54:22.983Z" },
 ]
+
+[[package]]
+name = "openapi-python-client"
+version = "0.28.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "httpx" },
+    { name = "jinja2" },
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "ruamel-yaml" },
+    { name = "ruff" },
+    { name = "shellingham" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/3c/03b6a9f8a056c748e151d3ff9dbc78236051fb7f8d48129aa19dce239e7b/openapi_python_client-0.28.3.tar.gz", hash = "sha256:c443df7cabf7d260feddb21626c0ff7bd83f5747453d10164f7c88d98e89c3d7", size = 125957, upload-time = "2026-03-05T23:45:13.043Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/a0/99db160a52ee98302c9e231d33afce350386eb2b6ee21de2b329f7bd4286/openapi_python_client-0.28.3-py3-none-any.whl", hash = "sha256:fbb29976a3d0fcea2822fdd7504b7437825dd4f075f2412dd234882c4a56d469", size = 183193, upload-time = "2026-03-05T23:45:11.458Z" },
+]
+
+[[package]]
+name = "ospd-issue-tracker-api"
+version = "0.1.0"
+source = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main#5fde7fe514b7082ae28340c27a21fd7d22c42481" }
 
 [[package]]
 name = "openapi-python-client"
@@ -1418,6 +1570,15 @@ wheels = [
 ]
 
 [[package]]
+name = "ruamel-yaml"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/3b/ebda527b56beb90cb7652cb1c7e4f91f48649fbcd8d2eb2fb6e77cd3329b/ruamel_yaml-0.19.1.tar.gz", hash = "sha256:53eb66cd27849eff968ebf8f0bf61f46cdac2da1d1f3576dd4ccee9b25c31993", size = 142709, upload-time = "2026-01-02T16:50:31.84Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/0c/51f6841f1d84f404f92463fc2b1ba0da357ca1e3db6b7fbda26956c3b82a/ruamel_yaml-0.19.1-py3-none-any.whl", hash = "sha256:27592957fedf6e0b62f281e96effd28043345e0e66001f97683aa9a40c667c93", size = 118102, upload-time = "2026-01-02T16:50:29.201Z" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.15.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1474,6 +1635,15 @@ wheels = [
 ]
 
 [[package]]
+name = "slack-sdk"
+version = "3.41.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/35/fc009118a13187dd9731657c60138e5a7c2dea88681a7f04dc406af5da7d/slack_sdk-3.41.0.tar.gz", hash = "sha256:eb61eb12a65bebeca9cb5d36b3f799e836ed2be21b456d15df2627cfe34076ca", size = 250568, upload-time = "2026-03-12T16:10:11.381Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/df/2e4be347ff98281b505cc0ccf141408cdd25eb5ca9f3830deb361b2472d3/slack_sdk-3.41.0-py2.py3-none-any.whl", hash = "sha256:bb18dcdfff1413ec448e759cf807ec3324090993d8ab9111c74081623b692a89", size = 313885, upload-time = "2026-03-12T16:10:09.811Z" },
+]
+
+[[package]]
 name = "starlette"
 version = "0.52.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1491,7 +1661,9 @@ name = "team-diamonds"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "chat-to-issues-integration" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "httpx" },
     { name = "jira-client-impl" },
     { name = "jira-service" },
@@ -1499,8 +1671,14 @@ dependencies = [
     { name = "jira-service-api-client" },
     { name = "mangum" },
     { name = "ospd-issue-tracker-api" },
+    { name = "jira-service" },
+    { name = "jira-service-adapter" },
+    { name = "jira-service-api-client" },
+    { name = "mangum" },
+    { name = "ospd-issue-tracker-api" },
     { name = "python-dotenv" },
     { name = "requests" },
+    { name = "types-requests" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1511,6 +1689,7 @@ dev = [
     { name = "mkdocstrings-python" },
     { name = "mypy" },
     { name = "openapi-python-client" },
+    { name = "openapi-python-client" },
     { name = "pymdown-extensions" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -1520,10 +1699,16 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "chat-to-issues-integration", editable = "components/chat_to_issues_integration" },
     { name = "fastapi" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "jira-client-impl", editable = "components/jira_client_impl" },
+    { name = "jira-service", editable = "components/jira_service" },
+    { name = "jira-service-adapter", editable = "components/jira_service_adapter" },
+    { name = "jira-service-api-client", editable = "components/jira_service_api_client" },
+    { name = "mangum" },
     { name = "jira-service", editable = "components/jira_service" },
     { name = "jira-service-adapter", editable = "components/jira_service_adapter" },
     { name = "jira-service-api-client", editable = "components/jira_service_api_client" },
@@ -1534,13 +1719,17 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.17.0" },
     { name = "openapi-python-client", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
+    { name = "openapi-python-client", marker = "extra == 'dev'", specifier = ">=0.21.0" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },
     { name = "pymdown-extensions", marker = "extra == 'dev'", specifier = ">=10.16.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.7" },
+    { name = "types-requests", specifier = ">=2.32.4.20260107" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.4.20250611" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
 provides-extras = ["dev"]

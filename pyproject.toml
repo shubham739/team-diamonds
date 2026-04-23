@@ -7,15 +7,20 @@ dependencies = [
     "mangum",
     "fastapi",
     "ospd-issue-tracker-api",
+    "mangum",
+    "fastapi",
+    "ospd-issue-tracker-api",
     "jira-client-impl",
     "jira-service",
     "jira-service-api-client",
     "jira-service-adapter",
+    "chat-to-issues-integration",
     "fastapi[standard]>=0.100.0",
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
     "uvicorn[standard]>=0.30.0",
     "httpx>=0.27.0",
+    "types-requests>=2.32.4.20260107",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +29,7 @@ dev = [
     "mkdocs-material>=9.6.15",
     "mkdocstrings-python>=1.16.12",
     "mypy>=1.17.0",
+    "openapi-python-client>=0.21.0",
     "openapi-python-client>=0.21.0",
     "pymdown-extensions>=10.16.1",
     "pytest>=8.4.1",
@@ -38,6 +44,7 @@ members = [
     "components/jira_service",
     "components/jira_service_api_client",
     "components/jira_service_adapter",
+    "components/chat_to_issues_integration",
 ]
 
 [tool.uv.sources]
@@ -46,11 +53,13 @@ jira-client-impl = {workspace = true}
 jira-service = {workspace = true}
 jira-service-api-client = {workspace = true}
 jira-service-adapter = {workspace = true}
+chat-to-issues-integration = {workspace = true}
 
 [tool.ruff]
 line-length = 130
 target-version = "py312"
 #main.py is being used for development and debugging and does not need to be checked by a strict ruff
+extend-exclude = ["main.py", "components/jira_service_api_client"]
 extend-exclude = ["main.py", "components/jira_service_api_client"]
 
 [tool.ruff.lint]
@@ -60,7 +69,7 @@ ignore = [
   "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
   "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117", "S603"] }
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117", "ANN001", "ANN201", "RUF043", "S603"], "**/demo*.py" = ["T201", "INP001", "D400", "D415", "BLE001", "PLR2004", "C901", "PLR0911", "PLR0912", "PLR0915"], "**/slack_demo*.py" = ["T201", "INP001", "D400", "D415", "BLE001", "PLR2004", "C901", "PLR0911", "PLR0912", "PLR0915"], "**/slack_bot_server.py" = ["INP001"] }
 
 [tool.ruff.lint.isort]
 known-first-party = [
@@ -68,6 +77,7 @@ known-first-party = [
     "jira_service",
     "jira_service_api_client",
     "jira_service_adapter",
+    "chat_to_issues_integration",
 ]
 
 [tool.ruff.lint.pylint]
@@ -82,6 +92,7 @@ mypy_path = [
     "components/jira_service/src",
     "components/jira_service_api_client",
     "components/jira_service_adapter/src",
+    "components/chat_to_issues_integration/src",
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
@@ -90,7 +101,16 @@ exclude = [
     "components/work_mgmt_client_interface",
     "components/jira_service_api_client",
 ]
+exclude = [
+    "main.py",
+    "components/work_mgmt_client_interface",
+    "components/jira_service_api_client",
+]
 
+[[tool.mypy.overrides]]
+module = ["api", "api.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 [[tool.mypy.overrides]]
 module = ["api", "api.*"]
 ignore_missing_imports = true
@@ -104,9 +124,11 @@ pythonpath = [
     "components/jira_service/src",
     "components/jira_service_api_client",
     "components/jira_service_adapter/src",
+    "components/chat_to_issues_integration/src",
 ]
 testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+# Remove --cov-fail-under from here — it already lives in [tool.coverage.report]
 # Remove --cov-fail-under from here — it already lives in [tool.coverage.report]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
@@ -119,6 +141,7 @@ markers = [
 [tool.coverage.run]
 source = ["components"]
 omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*", "components/jira_service_api_client/*"]
+omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*", "components/jira_service_api_client/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.
@@ -126,6 +149,7 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
+    "if interactive:", 
     "if interactive:", 
     # Ignore abstract methods decorators
     "@abstractmethod",
@@ -138,4 +162,6 @@ exclude_lines = [
 ]
 
 [tool.fastapi]
+entrypoint = "jira_service.main:app"
+
 entrypoint = "jira_service.main:app"
