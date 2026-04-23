@@ -10,11 +10,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from api.issue import Status
 
-from jira_service_adapter.adapter import JiraServiceAdapter, ServiceClientError, get_client
+from jira_service_adapter.adapter import IssueNotFoundError, JiraServiceAdapter, ServiceClientError, get_client
 from jira_service_adapter.issue import ServiceIssue
 from jira_service_api_client.models.status import Status as ServiceStatus
-from work_mgmt_client_interface.client import IssueNotFoundError
-from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 pytestmark = pytest.mark.unit
 
