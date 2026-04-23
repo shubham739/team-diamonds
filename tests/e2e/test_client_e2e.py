@@ -111,6 +111,7 @@ class TestMainScriptStructure:
             cwd=str(root),
             env=env,
             check=False,
+            shell=False,
         )
         assert result.returncode == 0, f"Import error:\n{result.stderr}"
         assert "ok" in result.stdout
