@@ -41,8 +41,6 @@ from jira_client_impl.jira_issue import get_issue as _make_issue
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from work_mgmt_client_interface.board import Board
-    from work_mgmt_client_interface.list import List
 
 # A precise definition of what JSON can actually contain!
 JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None  # noqa: UP040

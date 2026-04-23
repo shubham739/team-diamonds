@@ -19,8 +19,8 @@ import pytest
 from api.issue import Status
 from fastapi.testclient import TestClient
 
-from jira_service.ai_client_api import OpenRouterError, get_openrouter_client
 from jira_client_impl.jira_impl import IssueNotFoundError
+from jira_service.ai_client_api import OpenRouterError, get_openrouter_client
 from jira_service.main import app, get_jira_client
 
 if TYPE_CHECKING:
