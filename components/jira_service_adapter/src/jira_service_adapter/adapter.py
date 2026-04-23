@@ -7,7 +7,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from jira_service_adapter.issue import ServiceIssue
-<<<<<<< HEAD
+<<<<<<< ours
 from jira_service_api_client.client import JiraServiceClient, ServiceIssueNotFoundError
 =======
 from jira_service_api_client.api.default import (
@@ -22,12 +22,12 @@ from jira_service_api_client.models import CreateIssueRequest, UpdateIssueReques
 from jira_service_api_client.models.status import Status as ServiceStatus
 from work_mgmt_client_interface.client import IssueNotFoundError, IssueTrackerClient
 from work_mgmt_client_interface.issue import IssueUpdate, Status
->>>>>>> HW-2
+>>>>>>> theirs
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-<<<<<<< HEAD
+<<<<<<< ours
     from api.board import Board
     from api.issue import Issue, Status
 
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 def _to_service_status(status: Status) -> ServiceStatus:
     return status
+
 =======
     from work_mgmt_client_interface.issue import Issue
 
@@ -55,8 +56,7 @@ _TO_SERVICE_STATUS: dict[Status, ServiceStatus] = {
 
 def _to_service_status(status: Status) -> ServiceStatus:
     return _TO_SERVICE_STATUS[status]
->>>>>>> HW-2
-
+>>>>>>> theirs
 
 class IssueNotFoundError(Exception):
     """Raised when an issue cannot be found via the service adapter."""
@@ -123,11 +123,11 @@ class JiraServiceAdapter:
             title: Filter by title substring.
             desc: Filter by description substring.
             status: Filter by status.
-<<<<<<< HEAD
+<<<<<<< ours
             members: Filter by members.
 =======
             assignee: Filter by assignee email.
->>>>>>> HW-2
+>>>>>>> theirs
             due_date: Filter by due date.
             max_results: Maximum number of issues to return.
 
@@ -136,7 +136,7 @@ class JiraServiceAdapter:
 
         """
         service_status = _to_service_status(status) if status is not None else None
-<<<<<<< HEAD
+<<<<<<< ours
         items = self._client.get_issues(
             title=title,
             desc=desc,
@@ -146,7 +146,7 @@ class JiraServiceAdapter:
             client=self._client,
             title=title,
             desc=description,
->>>>>>> HW-2
+>>>>>>> theirs
             status=service_status,
             members=members,
             due_date=due_date,
@@ -175,11 +175,11 @@ class JiraServiceAdapter:
             title: Issue title.
             desc: Issue description.
             status: Initial status.
-<<<<<<< HEAD
+<<<<<<< ours
             members: Assigned members.
 =======
             assignee: Assignee email.
->>>>>>> HW-2
+>>>>>>> theirs
             due_date: Due date string.
             board_id: Board identifier.
 
@@ -191,11 +191,11 @@ class JiraServiceAdapter:
         members = [assignee] if assignee is not None else None
         body = CreateIssueRequest(
             title=title,
-<<<<<<< HEAD
+<<<<<<< ours
             desc=desc,
 =======
             desc=description,
->>>>>>> HW-2
+>>>>>>> theirs
             status=service_status,
             members=members,
             due_date=due_date,
@@ -238,7 +238,7 @@ class JiraServiceAdapter:
             IssueNotFoundError: If the issue does not exist.
 
         """
-<<<<<<< HEAD
+<<<<<<< ours
         service_status = _to_service_status(status) if status is not None else None
 
         try:
@@ -273,7 +273,7 @@ class JiraServiceAdapter:
             raise ServiceClientError(msg)
         assert resp.parsed is not None
         data: dict[str, Any] = resp.parsed.additional_properties
->>>>>>> HW-2
+>>>>>>> theirs
         return ServiceIssue(data)
 
     def delete_issue(self, issue_id: str) -> None:
