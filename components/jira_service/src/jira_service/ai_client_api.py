@@ -19,12 +19,12 @@ JIRA_TOOLS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Filter by title substring"},
-                    "description": {"type": "string", "description": "Filter by description substring"},
+                    "desc": {"type": "string", "description": "Filter by description substring"},
                     "status": {
                         "type": "string",
                         "enum": ["todo", "in_progress", "complete", "cancelled"],
                     },
-                    "assignee": {"type": "string", "description": "Filter by assignee email"},
+                    "members": {"type": "array", "items": {"type": "string"}, "description": "Filter by member emails"},
                     "due_date": {"type": "string", "description": "Filter by due date (YYYY-MM-DD)"},
                     "max_results": {"type": "integer", "description": "Max results (1-100, default 20)"},
                 },
@@ -54,13 +54,14 @@ JIRA_TOOLS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
-                    "description": {"type": "string"},
+                    "desc": {"type": "string"},
                     "status": {
                         "type": "string",
                         "enum": ["todo", "in_progress", "complete", "cancelled"],
                     },
-                    "assignee": {"type": "string", "description": "Assignee email"},
+                    "members": {"type": "array", "items": {"type": "string"}, "description": "Member emails"},
                     "due_date": {"type": "string", "description": "Due date (YYYY-MM-DD)"},
+                    "board_id": {"type": "string", "description": "Board ID"},
                 },
                 "required": ["title"],
             },
@@ -76,13 +77,14 @@ JIRA_TOOLS: list[dict[str, Any]] = [
                 "properties": {
                     "issue_id": {"type": "string", "description": "Jira issue key"},
                     "title": {"type": "string"},
-                    "description": {"type": "string"},
+                    "desc": {"type": "string"},
                     "status": {
                         "type": "string",
                         "enum": ["todo", "in_progress", "complete", "cancelled"],
                     },
-                    "assignee": {"type": "string"},
+                    "members": {"type": "array", "items": {"type": "string"}},
                     "due_date": {"type": "string"},
+                    "board_id": {"type": "string"},
                 },
                 "required": ["issue_id"],
             },

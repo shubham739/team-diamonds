@@ -489,9 +489,9 @@ def _execute_tool(name: str, args: dict[str, Any], client: IssueTrackerClient) -
         issues = list(
             client.get_issues(
                 title=args.get("title"),
-                description=args.get("description"),
+                desc=args.get("desc"),
                 status=Status(status_val) if status_val else None,
-                assignee=args.get("assignee"),
+                members=args.get("members"),
                 due_date=args.get("due_date"),
                 max_results=int(args.get("max_results", 20)),
             )
@@ -505,23 +505,25 @@ def _execute_tool(name: str, args: dict[str, Any], client: IssueTrackerClient) -
         status_val = args.get("status")
         issue = client.create_issue(
             title=args.get("title"),
-            description=args.get("description"),
+            desc=args.get("desc"),
             status=Status(status_val) if status_val else None,
-            assignee=args.get("assignee"),
+            members=args.get("members"),
             due_date=args.get("due_date"),
+            board_id=args.get("board_id"),
         )
         return _issue_to_dict(issue)
 
     if name == "update_issue":
         status_val = args.get("status")
-        update = IssueUpdate(
+        return _issue_to_dict(client.update_issue(
+            args["issue_id"],
             title=args.get("title"),
-            description=args.get("description"),
+            desc=args.get("desc"),
             status=Status(status_val) if status_val else None,
-            assignee=args.get("assignee"),
+            members=args.get("members"),
             due_date=args.get("due_date"),
-        )
-        return _issue_to_dict(client.update_issue(args["issue_id"], update))
+            board_id=args.get("board_id"),
+        ))
 
     if name == "delete_issue":
         client.delete_issue(args["issue_id"])
