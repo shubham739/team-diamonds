@@ -19,6 +19,7 @@ import pytest
 from api.issue import Status
 from fastapi.testclient import TestClient
 
+from jira_service.ai_client_api import OpenRouterError, get_openrouter_client
 from jira_client_impl.jira_impl import IssueNotFoundError
 from jira_service.main import app, get_jira_client
 
@@ -353,6 +354,83 @@ class TestDeleteIssue:
 # ---------------------------------------------------------------------------
 # Docs endpoints
 # ---------------------------------------------------------------------------
+
+
+class TestChat:
+    def test_requires_auth(self) -> None:
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/chat", json={"message": "list issues"})
+        assert response.status_code == 401
+
+    def test_missing_message_returns_422(self, api_client: TestClient) -> None:
+        mock_or = MagicMock()
+        app.dependency_overrides[get_openrouter_client] = lambda: mock_or
+        try:
+            response = api_client.post("/chat", headers=_AUTH_HEADER, json={})
+            assert response.status_code == 422
+        finally:
+            app.dependency_overrides.pop(get_openrouter_client, None)
+
+    def test_simple_reply_no_tool_calls(self, api_client: TestClient) -> None:
+        mock_or = MagicMock()
+        mock_or.complete.return_value = {
+            "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Hello!", "tool_calls": None}}],
+        }
+        app.dependency_overrides[get_openrouter_client] = lambda: mock_or
+        try:
+            response = api_client.post("/chat", headers=_AUTH_HEADER, json={"message": "Hi"})
+            assert response.status_code == 200
+            body = response.json()
+            assert body["reply"] == "Hello!"
+            assert body["actions"] == []
+        finally:
+            app.dependency_overrides.pop(get_openrouter_client, None)
+
+    def test_tool_call_list_issues(self, api_client: TestClient, mock_jira_client: MagicMock) -> None:
+        mock_jira_client.get_issues.return_value = iter([_make_mock_issue("TD-1", "Bug")])
+        mock_or = MagicMock()
+        mock_or.complete.side_effect = [
+            {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {"id": "c1", "type": "function", "function": {"name": "list_issues", "arguments": "{}"}},
+                            ],
+                        },
+                    },
+                ],
+            },
+            {
+                "choices": [
+                    {"finish_reason": "stop", "message": {"role": "assistant", "content": "Found 1 issue.", "tool_calls": None}},
+                ],
+            },
+        ]
+        app.dependency_overrides[get_openrouter_client] = lambda: mock_or
+        try:
+            response = api_client.post("/chat", headers=_AUTH_HEADER, json={"message": "List issues"})
+            assert response.status_code == 200
+            body = response.json()
+            assert body["reply"] == "Found 1 issue."
+            assert len(body["actions"]) == 1
+            assert body["actions"][0]["tool"] == "list_issues"
+        finally:
+            app.dependency_overrides.pop(get_openrouter_client, None)
+
+    def test_openrouter_error_returns_502(self, api_client: TestClient) -> None:
+        mock_or = MagicMock()
+        mock_or.complete.side_effect = OpenRouterError("bad key")
+        app.dependency_overrides[get_openrouter_client] = lambda: mock_or
+        try:
+            response = api_client.post("/chat", headers=_AUTH_HEADER, json={"message": "hello"})
+            assert response.status_code == 502
+            assert "OpenRouter" in response.json()["detail"]
+        finally:
+            app.dependency_overrides.pop(get_openrouter_client, None)
 
 
 class TestDocs:

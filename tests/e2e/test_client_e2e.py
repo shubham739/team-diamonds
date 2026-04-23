@@ -77,7 +77,7 @@ class TestMainScriptStructure:
         """main.py must have valid Python syntax."""
         if not MAIN_SCRIPT.exists():
             pytest.skip("main.py not found.")
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [sys.executable, "-m", "py_compile", str(MAIN_SCRIPT)],
             capture_output=True,
             text=True,
@@ -98,7 +98,7 @@ class TestMainScriptStructure:
             ],
         )
         env = {**os.environ, "PYTHONPATH": pythonpath}
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",
@@ -110,6 +110,7 @@ class TestMainScriptStructure:
             cwd=str(root),
             env=env,
             check=False,
+            shell=False,
         )
         assert result.returncode == 0, f"Import error:\n{result.stderr}"
         assert "ok" in result.stdout

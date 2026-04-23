@@ -556,6 +556,7 @@ version = "0.1.0"
 source = { editable = "components/jira_service" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "jira-client-impl" },
     { name = "ospd-issue-tracker-api" },
     { name = "python-dotenv" },
@@ -573,6 +574,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.100.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
     { name = "jira-client-impl", editable = "components/jira_client_impl" },
     { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?branch=main" },

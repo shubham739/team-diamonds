@@ -196,6 +196,26 @@ class JiraServiceAdapter:
         except ServiceIssueNotFoundError as exc:
             raise IssueNotFoundError(str(exc)) from exc
 
+    # ------------------------------------------------------------------
+    # Board and List access — not yet exposed by the HTTP service
+    # ------------------------------------------------------------------
+
+    def get_board(self, board_id: str) -> Board:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_boards(self) -> Iterator[Board]:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_list(self, list_id: str) -> List:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_lists(self, board_id: str) -> Iterator[List]:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
 
     # ------------------------------------------------------------------
     # Board and List access — not yet exposed by the HTTP service
