@@ -99,7 +99,7 @@ class TestMainScriptStructure:
             ],
         )
         env = {**os.environ, "PYTHONPATH": pythonpath}
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",
