@@ -68,7 +68,7 @@ jobs:
             source .venv/bin/activate  
             pytest components/ --cov=components --cov-report=xml --cov-report=term \
                      --junitxml=test-results/unit/junit.xml \
-                     --cov-fail-under=84
+                     --cov-fail-under=85
       - run:
           name: "Run Static Analysis (mypy)"
           command: |
@@ -179,9 +179,10 @@ jobs:
               lambda_package/work_mgmt_client_interface
             cp -r components/jira_service_adapter/src/jira_service_adapter \
               lambda_package/jira_service_adapter
-            # Install PyPI dependencies
+            # Install PyPI dependencies (including git-sourced api package)
             uv pip install mangum fastapi httpx python-dotenv requests \
               "pydantic==2.10.6" "pydantic-core==2.27.2" \
+              "git+https://github.com/tatyanacthomas/ospd_issue_tracker.git@main" \
               --python-platform x86_64-unknown-linux-gnu \
               --python 3.12 \
               -t lambda_package/

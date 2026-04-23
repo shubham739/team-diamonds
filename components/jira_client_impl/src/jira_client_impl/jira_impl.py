@@ -5,9 +5,17 @@ Authentication
 The client supports two credential modes:
 
 1. API Token (Basic Auth) — get_client(interactive=False) or get_client(interactive=True)
+1. API Token (Basic Auth) — get_client(interactive=False) or get_client(interactive=True)
         JIRA_BASE_URL   https://myorg.atlassian.net
         JIRA_USER_EMAIL me@example.com
         JIRA_API_TOKEN  <token from https://id.atlassian.com/manage-profile/security/api-tokens>
+
+2. OAuth2 Bearer Token — get_oauth_client(access_token)
+        JIRA_CLOUD_ID   <cloud ID from https://api.atlassian.com/oauth/token/accessible-resources>
+        access_token    Atlassian OAuth2 access token (passed at call-time, NOT read from env)
+
+   When using OAuth2, the Atlassian REST API base URL changes to:
+        https://api.atlassian.com/ex/jira/{cloud_id}
 
 2. OAuth2 Bearer Token — get_oauth_client(access_token)
         JIRA_CLOUD_ID   <cloud ID from https://api.atlassian.com/oauth/token/accessible-resources>
@@ -20,6 +28,8 @@ Dependencies:
     uv add requests
 
 """
+
+# to avoid having to consider forward declarations, the below line must be first line in the file
 
 # to avoid having to consider forward declarations, the below line must be first line in the file
 from __future__ import annotations
@@ -59,6 +69,8 @@ JIRA_SPECIAL_CHARS = r'(["\'*?=~><!\+\-:&|()\[\]{}\\^])'
 
 # Jira requires a transition to be selected to change status
 # the below is a mapping of common statuses and a mapping to a recognized transition in Jira
+# Jira requires a transition to be selected to change status
+# the below is a mapping of common statuses and a mapping to a recognized transition in Jira
 _STATUS_TO_JIRA_TRANSITION: dict[Status, list[str]] = {
     Status.TO_DO: [
         "to do",
@@ -95,6 +107,7 @@ class BaseIssueNotFoundError(Exception):
 
 class IssueNotFoundError(BaseIssueNotFoundError):
     """Raise when a requested Jira issue does not exist."""
+
 
 
 def sanitize_input(value: str) -> str:
@@ -144,6 +157,20 @@ class JiraClient:
         """
         self._base_url = base_url.rstrip("/")
         self._session = requests.Session()
+        if access_token:
+            # OAuth2 bearer token mode — used by the FastAPI service per-user path
+            self._session.headers.update(
+                {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+        else:
+            # API token / Basic Auth mode — used by the local library path
+            self._auth = HTTPBasicAuth(user_email, api_token)
+            self._session.auth = self._auth
+            self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
         if access_token:
             # OAuth2 bearer token mode — used by the FastAPI service per-user path
             self._session.headers.update(
@@ -267,6 +294,7 @@ class JiraClient:
     def get_issue(self, issue_id: str) -> JiraIssue:
         """Fetch a single Jira issue by id."""
         # _get returns a json string, build_issue builds the Issue instance
+        # _get returns a json string, build_issue builds the Issue instance
         data = self._get(f"/issue/{issue_id}")
 
         if not isinstance(data, dict):
@@ -342,14 +370,18 @@ class JiraClient:
         status: Status | None = None,
         members: list[str] | None = None,
         due_date: str | None = None,
-        board_id: str | None = None,  # noqa: ARG002
+        board_id: str | None = None,
     ) -> JiraIssue:
         # A board is a required field in Jira, and likely all other issue tracker implementations
         """Create a new Jira issue and return it as a JiraIssue."""
-        # required fields -- title and issue type
+        # Use board_id as project key if provided, otherwise use OPS as default
+        project_key = board_id or "OPS"
+
+        # required fields -- title, issue type, and project
         fields: dict[str, Any] = {
+            "project": {"key": project_key},
             "summary": title,
-            "issuetype": {"name": "Issue"},
+            "issuetype": {"name": "Task"},
         }
         if desc:
             # Jira Cloud expects Atlassian Document Format for description
@@ -516,8 +548,10 @@ class JiraClient:
         said transition by its ID.
         """
         # since our status value have an undercore, this changes the underscores to spaces, and lowers text
+        # since our status value have an undercore, this changes the underscores to spaces, and lowers text
         target.value.replace("_", " ").lower()
 
+        # calls the Jira API to get a list of transitions available for this issue
         # calls the Jira API to get a list of transitions available for this issue
         data = self._get(f"/issue/{issue_id}/transitions")
 
@@ -528,6 +562,7 @@ class JiraClient:
         raw_transitions = data.get("transitions", [])
 
         if not isinstance(raw_transitions, list):
+            raw_transitions = []
             raw_transitions = []
 
         transitions: list[dict[str, Any]] = [t for t in raw_transitions if isinstance(t, dict)]
@@ -542,7 +577,9 @@ class JiraClient:
                 match = available[candidate.lower()]
                 break
         # raises Jira error if there are no available transitions
+        # raises Jira error if there are no available transitions
         if match is None:
+            msg = f"No transition to '{target.value}' found for {issue_id}. Available transitions: {list(available.keys())}"
             msg = f"No transition to '{target.value}' found for {issue_id}. Available transitions: {list(available.keys())}"
             raise JiraError(msg)
 
@@ -552,6 +589,7 @@ class JiraClient:
 # ---------------------------------------------------------------------------
 # ADF builder -  Jira requires description data to be in this format
 # ---------------------------------------------------------------------------
+
 
 
 def _text_to_adf(text: str) -> dict[str, Any]:
@@ -579,6 +617,7 @@ def _text_to_adf(text: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Get client
 # ---------------------------------------------------------------------------
+
 
 
 def get_client(*, interactive: bool = False) -> JiraClient:
@@ -615,7 +654,18 @@ def get_client(*, interactive: bool = False) -> JiraClient:
             ]
             if not val
         ]
+        # collects the missing fields and raises an error alerting to the missing values
+        missing = [
+            name
+            for name, val in [
+                ("JIRA_BASE_URL", base_url),
+                ("JIRA_USER_EMAIL", user_email),
+                ("JIRA_API_TOKEN", api_token),
+            ]
+            if not val
+        ]
         if missing:
+            msg = f"Missing required environment variables: {', '.join(missing)}. Set them or call get_client(interactive=True)."
             msg = f"Missing required environment variables: {', '.join(missing)}. Set them or call get_client(interactive=True)."
             raise OSError(msg)
 
