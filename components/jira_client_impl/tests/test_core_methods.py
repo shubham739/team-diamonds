@@ -203,7 +203,6 @@ def test_update_issue_with_no_changes_skips_put_sa(jira_client: Any) -> None:
 
 # -------------------- tests for _apply_status_transition method --------------------
 
-
 def test_status_transition_finds_correct_transition_sa(jira_client: Any) -> None:
     """Test correct transition."""
     # Mock transitions endpoint response

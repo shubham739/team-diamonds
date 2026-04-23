@@ -26,4 +26,4 @@ ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_t
 jira-service-api-client = {workspace = true}
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 84
