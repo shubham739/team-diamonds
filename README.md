@@ -33,7 +33,7 @@ The project is a `uv` workspace containing five packages arranged in a layered a
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
-| 1 | `work-mgmt-client-interface` | Abstract contract — defines the `IssueTrackerClient` ABC and shared domain models (`Issue`, `Status`, `IssueUpdate`, `Board`) |
+| 1 | `api` | External contract package — defines the shared client and domain models consumed by all components |
 | 2 | `jira-client-impl` | Local Jira implementation — calls the Jira REST API directly using Basic Auth or OAuth2 |
 | 3 | `jira-service` | FastAPI microservice — exposes layer 2 operations over HTTP with OAuth2 support |
 | 4 | `jira-service-api-client` | Type-safe `httpx`-based HTTP client for the FastAPI service |
@@ -64,17 +64,11 @@ team-diamonds/
 │   └── (GitHub configuration)
 │
 ├── components/
-│   ├── work_mgmt_client_interface/            # Layer 1: Abstract contracts (provider-agnostic)
-│   │   ├── src/work_mgmt_client_interface/
-│   │   │   ├── client.py                      # IssueTrackerClient ABC + get_client() factory
-│   │   │   ├── issue.py                       # Issue ABC, IssueUpdate dataclass, Status enum
-│   │   │   └── board.py                       # Board ABC, BoardColumn dataclass
-│   │   ├── pyproject.toml                     # Zero external dependencies (pure interfaces)
-│   │   └── tests/
+│   ├── (Contract layer provided by external `api` package dependency)
 │   │
 │   ├── jira_client_impl/                      # Layer 2: Direct Jira REST API implementation
 │   │   ├── src/jira_client_impl/
-│   │   │   ├── jira_impl.py                   # JiraClient — concrete IssueTrackerClient
+│   │   │   ├── jira_impl.py                   # JiraClient — concrete implementation of the api client contract
 │   │   │   ├── jira_issue.py                  # JiraIssue — parses Jira API responses
 │   │   │   └── jira_board.py                  # JiraBoard — board/project operations
 │   │   ├── pyproject.toml

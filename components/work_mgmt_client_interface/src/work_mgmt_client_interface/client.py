@@ -3,7 +3,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 
+from work_mgmt_client_interface.board import Board
 from work_mgmt_client_interface.issue import Issue, IssueUpdate, Status
+from work_mgmt_client_interface.list import List
 
 
 class IssueTrackerClient(ABC):
@@ -116,6 +118,66 @@ class IssueTrackerClient(ABC):
 
         Raises:
             IssueNotFoundError: If no issue with that ID exists.
+
+        """
+        raise NotImplementedError
+
+    # ------------------------------------------------------------------
+    # Board access
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def get_board(self, board_id: str) -> Board:
+        """Return a single board by id.
+
+        Args:
+            board_id: The unique identifier of the board.
+
+        Returns:
+            A Board instance.
+
+        Raises:
+            IssueNotFoundError: If no board with that ID exists.
+
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_boards(self) -> Iterator[Board]:
+        """Return an iterator over all accessible boards.
+
+        Yields:
+            Board instances, one per board visible to the current credentials.
+
+        """
+        raise NotImplementedError
+
+    # ------------------------------------------------------------------
+    # List access
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def get_list(self, list_id: str) -> List:
+        """Return a single list (board column) by id.
+
+        Args:
+            list_id: The unique identifier of the list.
+
+        Returns:
+            A List instance.
+
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_lists(self, board_id: str) -> Iterator[List]:
+        """Return an iterator over all lists belonging to a board.
+
+        Args:
+            board_id: The unique identifier of the parent board.
+
+        Yields:
+            List instances representing the columns of the given board.
 
         """
         raise NotImplementedError

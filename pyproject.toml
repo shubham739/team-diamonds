@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "mangum",
     "fastapi",
-    "work-mgmt-client-interface",
+    "ospd-issue-tracker-api",
     "jira-client-impl",
     "jira-service",
     "jira-service-api-client",
@@ -34,12 +34,18 @@ dev = [
 
 [tool.uv.workspace]
 members = [
-    "components/work_mgmt_client_interface",
     "components/jira_client_impl",
     "components/jira_service",
     "components/jira_service_api_client",
     "components/jira_service_adapter",
 ]
+
+[tool.uv.sources]
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
+jira-client-impl = {workspace = true}
+jira-service = {workspace = true}
+jira-service-api-client = {workspace = true}
+jira-service-adapter = {workspace = true}
 
 [tool.ruff]
 line-length = 130
@@ -54,12 +60,11 @@ ignore = [
   "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
   "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117"] }
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117", "S603"] }
 
 [tool.ruff.lint.isort]
 known-first-party = [
     "jira_client_impl",
-    "work_mgmt_client_interface",
     "jira_service",
     "jira_service_api_client",
     "jira_service_adapter",
@@ -71,8 +76,8 @@ max-args = 8
 [tool.mypy]
 strict = true
 explicit_package_bases = true # Required for src layout
+disable_error_code = ["import-untyped"]
 mypy_path = [
-    "components/work_mgmt_client_interface/src",
     "components/jira_client_impl/src",
     "components/jira_service/src",
     "components/jira_service_api_client",
@@ -82,14 +87,18 @@ ignore_missing_imports = false
 warn_unused_ignores = false
 exclude = [
     "main.py",
+    "components/work_mgmt_client_interface",
 ]
 
+[[tool.mypy.overrides]]
+module = ["api", "api.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 pythonpath = [
     ".",
     "components",
-    "components/work_mgmt_client_interface/src",
     "components/jira_client_impl/src",
     "components/jira_service/src",
     "components/jira_service_api_client",
@@ -126,13 +135,6 @@ exclude_lines = [
     "pass",
     "\\.\\.\\.",   
 ]
-
-[tool.uv.sources]
-work-mgmt-client-interface = {workspace = true}
-jira-client-impl = {workspace = true}
-jira-service = {workspace = true}
-jira-service-api-client = {workspace = true}
-jira-service-adapter = {workspace = true}
 
 [tool.fastapi]
 entrypoint = "jira_service.main:app"

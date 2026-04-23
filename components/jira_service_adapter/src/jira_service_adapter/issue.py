@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from work_mgmt_client_interface.issue import Issue, Status
+from api.issue import Issue, Status
 
 _STATUS_MAP: dict[str, Status] = {
     "to_do": Status.TODO,
@@ -13,11 +13,11 @@ _STATUS_MAP: dict[str, Status] = {
 }
 
 
-def _map_status(raw: str) -> Status:
-    return _STATUS_MAP.get(raw, Status.TODO)
+def _map_status(service_status: ServiceStatus) -> Status:
+    return service_status
 
 
-class ServiceIssue(Issue):
+class ServiceIssue(Issue):  # type: ignore[misc]
     """Issue implementation that wraps a remote service response.
 
     Args:
@@ -40,9 +40,9 @@ class ServiceIssue(Issue):
         return str(self._data["title"])
 
     @property
-    def description(self) -> str:
+    def desc(self) -> str:
         """Return the issue description."""
-        return str(self._data["description"])
+        return self._data.desc
 
     @property
     def status(self) -> Status:
@@ -50,13 +50,19 @@ class ServiceIssue(Issue):
         return _map_status(str(self._data["status"]))
 
     @property
-    def assignee(self) -> str | None:
-        """Return the assignee or None."""
-        v = self._data.get("assignee")
-        return str(v) if v is not None else None
+    def members(self) -> list[str] | None:
+        """Return the assigned members or None."""
+        return self._data.members
 
     @property
     def due_date(self) -> str | None:
         """Return the due date or None."""
-        v = self._data.get("due_date")
-        return str(v) if v is not None else None
+        return self._data.due_date
+
+    @property
+    def board_id(self) -> str:
+        """Return the board id.
+
+        The current service payload does not expose board identity.
+        """
+        raise NotImplementedError

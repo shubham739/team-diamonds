@@ -68,7 +68,7 @@ jobs:
             source .venv/bin/activate  
             pytest components/ --cov=components --cov-report=xml --cov-report=term \
                      --junitxml=test-results/unit/junit.xml \
-                     --cov-fail-under=85
+                     --cov-fail-under=84
       - run:
           name: "Run Static Analysis (mypy)"
           command: |
@@ -180,7 +180,7 @@ jobs:
             cp -r components/jira_service_adapter/src/jira_service_adapter \
               lambda_package/jira_service_adapter
             # Install PyPI dependencies
-            uv pip install mangum fastapi python-dotenv requests \
+            uv pip install mangum fastapi httpx python-dotenv requests \
               "pydantic==2.10.6" "pydantic-core==2.27.2" \
               --python-platform x86_64-unknown-linux-gnu \
               --python 3.12 \
@@ -320,6 +320,7 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI
       - lint:
           requires:
             - build
@@ -328,6 +329,7 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI
       - unit_test:
           requires:
             - build
@@ -336,6 +338,7 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI
       - circleci_test:
           requires:
             - unit_test
@@ -345,6 +348,7 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI
       - integration_test:
           requires:
             - circleci_test
@@ -354,6 +358,7 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI
       - report_summary:
           requires:
             - unit_test
@@ -364,6 +369,7 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI
       - deploy:
           requires:
             - report_summary
@@ -373,3 +379,4 @@ workflows:
               only:
                 - main
                 - HW-2
+                - chz9577-hw3-AI

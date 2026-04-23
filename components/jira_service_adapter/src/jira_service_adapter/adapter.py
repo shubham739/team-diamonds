@@ -7,6 +7,9 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from jira_service_adapter.issue import ServiceIssue
+<<<<<<< ours
+from jira_service_api_client.client import JiraServiceClient, ServiceIssueNotFoundError
+=======
 from jira_service_api_client.api.default import (
     create_issue_issues_post,
     delete_issue_issues_issue_id_delete,
@@ -19,10 +22,23 @@ from jira_service_api_client.models import CreateIssueRequest, UpdateIssueReques
 from jira_service_api_client.models.status import Status as ServiceStatus
 from work_mgmt_client_interface.client import IssueNotFoundError, IssueTrackerClient
 from work_mgmt_client_interface.issue import IssueUpdate, Status
+>>>>>>> theirs
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+<<<<<<< ours
+    from api.board import Board
+    from api.issue import Issue, Status
+
+    from jira_service_api_client.models import Status as ServiceStatus
+
+
+
+def _to_service_status(status: Status) -> ServiceStatus:
+    return status
+
+=======
     from work_mgmt_client_interface.issue import Issue
 
 
@@ -40,9 +56,13 @@ _TO_SERVICE_STATUS: dict[Status, ServiceStatus] = {
 
 def _to_service_status(status: Status) -> ServiceStatus:
     return _TO_SERVICE_STATUS[status]
+>>>>>>> theirs
+
+class IssueNotFoundError(Exception):
+    """Raised when an issue cannot be found via the service adapter."""
 
 
-class JiraServiceAdapter(IssueTrackerClient):
+class JiraServiceAdapter:
     """Implements IssueTrackerClient by delegating to the remote Jira service.
 
     This is a drop-in replacement for JiraClient. Any consumer that works with
@@ -91,9 +111,9 @@ class JiraServiceAdapter(IssueTrackerClient):
         self,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
         max_results: int = 20,
     ) -> Iterator[Issue]:
@@ -101,9 +121,13 @@ class JiraServiceAdapter(IssueTrackerClient):
 
         Args:
             title: Filter by title substring.
-            description: Filter by description substring.
+            desc: Filter by description substring.
             status: Filter by status.
+<<<<<<< ours
+            members: Filter by members.
+=======
             assignee: Filter by assignee email.
+>>>>>>> theirs
             due_date: Filter by due date.
             max_results: Maximum number of issues to return.
 
@@ -112,11 +136,17 @@ class JiraServiceAdapter(IssueTrackerClient):
 
         """
         service_status = _to_service_status(status) if status is not None else None
+<<<<<<< ours
+        items = self._client.get_issues(
+            title=title,
+            desc=desc,
+=======
         members = [assignee] if assignee is not None else None
         resp = list_issues_issues_get.sync_detailed(
             client=self._client,
             title=title,
             desc=description,
+>>>>>>> theirs
             status=service_status,
             members=members,
             due_date=due_date,
@@ -133,19 +163,25 @@ class JiraServiceAdapter(IssueTrackerClient):
         self,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
+        board_id: str | None = None,
     ) -> Issue:
         """Create a new issue via the remote service.
 
         Args:
             title: Issue title.
-            description: Issue description.
+            desc: Issue description.
             status: Initial status.
+<<<<<<< ours
+            members: Assigned members.
+=======
             assignee: Assignee email.
+>>>>>>> theirs
             due_date: Due date string.
+            board_id: Board identifier.
 
         Returns:
             The newly created Issue.
@@ -155,10 +191,15 @@ class JiraServiceAdapter(IssueTrackerClient):
         members = [assignee] if assignee is not None else None
         body = CreateIssueRequest(
             title=title,
+<<<<<<< ours
+            desc=desc,
+=======
             desc=description,
+>>>>>>> theirs
             status=service_status,
             members=members,
             due_date=due_date,
+            board_id=board_id,
         )
         resp = create_issue_issues_post.sync_detailed(client=self._client, body=body)
         if resp.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
@@ -168,12 +209,27 @@ class JiraServiceAdapter(IssueTrackerClient):
         data: dict[str, Any] = resp.parsed.additional_properties
         return ServiceIssue(data)
 
-    def update_issue(self, issue_id: str, update: IssueUpdate) -> Issue:
-        """Apply an IssueUpdate to an existing issue via the remote service.
+    def update_issue(
+        self,
+        issue_id: str,
+        *,
+        title: str | None = None,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status | None = None,
+        board_id: str | None = None,
+    ) -> Issue:
+        """Apply a partial update to an existing issue via the remote service.
 
         Args:
             issue_id: Unique identifier of the issue to update.
-            update: IssueUpdate carrying the desired changes.
+            title: Issue title.
+            desc: Issue description.
+            members: Assigned members.
+            due_date: Due date string.
+            status: Issue status.
+            board_id: Board identifier.
 
         Returns:
             The updated Issue.
@@ -182,6 +238,22 @@ class JiraServiceAdapter(IssueTrackerClient):
             IssueNotFoundError: If the issue does not exist.
 
         """
+<<<<<<< ours
+        service_status = _to_service_status(status) if status is not None else None
+
+        try:
+            data = self._client.update_issue(
+                issue_id,
+                title=title,
+                desc=desc,
+                status=service_status,
+                members=members,
+                due_date=due_date,
+                board_id=board_id,
+            )
+        except ServiceIssueNotFoundError as exc:
+            raise IssueNotFoundError(str(exc)) from exc
+=======
         changed = update.set_fields()
         service_status: ServiceStatus | None = None
         if "status" in changed:
@@ -201,6 +273,7 @@ class JiraServiceAdapter(IssueTrackerClient):
             raise ServiceClientError(msg)
         assert resp.parsed is not None
         data: dict[str, Any] = resp.parsed.additional_properties
+>>>>>>> theirs
         return ServiceIssue(data)
 
     def delete_issue(self, issue_id: str) -> None:
@@ -221,6 +294,18 @@ class JiraServiceAdapter(IssueTrackerClient):
             msg = f"Service error {resp.status_code}"
             raise ServiceClientError(msg)
 
+
+    # ------------------------------------------------------------------
+    # Board and List access — not yet exposed by the HTTP service
+    # ------------------------------------------------------------------
+
+    def get_board(self, board_id: str) -> Board:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
+
+    def get_boards(self) -> Iterator[Board]:
+        """Not yet implemented for the remote service adapter."""
+        raise NotImplementedError
 
 def get_client(*, interactive: bool = False) -> JiraServiceAdapter:  # noqa: ARG001
     """Create a JiraServiceAdapter from environment variables.

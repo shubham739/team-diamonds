@@ -45,12 +45,7 @@ source .venv/bin/activate  # macOS/Linux
 
 ```
 ├── components/
-│ ├── work_mgmt_client_interface/           # Vendor-neutral interface contracts (ABC)
-│ │  ├── src/
-│ │  └── work_mgmt_client_interface/
-│ │    ├── board.py
-│ │    ├── client.py
-│ │    └── issue.py
+│ ├── (Vendor-neutral interface contracts are provided by the external `api` package)
 │ │
 │ ├── jira_client_impl/                     # Local Jira implementation (Basic Auth + OAuth2)
 │ │ ├── src/
@@ -81,7 +76,7 @@ source .venv/bin/activate  # macOS/Linux
 │ │ ├── tests/
 │ │    └── test_client.py
 │ │
-│ └── jira_service_adapter/                 # Adapter: IssueTrackerClient over HTTP (HW2)
+│ └── jira_service_adapter/                 # Adapter: api client contract over HTTP (HW2)
 │ ├── src/
 │ │ └── jira_service_adapter/
 │ │ ├── adapter.py
