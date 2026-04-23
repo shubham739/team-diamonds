@@ -104,21 +104,21 @@ class JiraServiceClient:
         board_id: str | None = None,
     ) -> IssueData:
         """Create a new issue."""
-        params: dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if title is not None:
-            params["title"] = title
+            body["title"] = title
         if desc is not None:
-            params["desc"] = desc
+            body["desc"] = desc
         if status is not None:
-            params["status"] = status.value
+            body["status"] = status.value
         if members is not None:
-            params["members"] = members
+            body["members"] = members
         if due_date is not None:
-            params["due_date"] = due_date
+            body["due_date"] = due_date
         if board_id is not None:
-            params["board_id"] = board_id
+            body["board_id"] = board_id
 
-        response = self._http.post("/issues", params=params)
+        response = self._http.post("/issues", json=body)
         self._raise_for_status(response)
         return IssueData.from_dict(response.json())
 
@@ -134,21 +134,21 @@ class JiraServiceClient:
         board_id: str | None = None,
     ) -> IssueData:
         """Update an existing issue."""
-        params: dict[str, Any] = {}
+        body: dict[str, Any] = {}
         if title is not None:
-            params["title"] = title
+            body["title"] = title
         if desc is not None:
-            params["desc"] = desc
+            body["desc"] = desc
         if status is not None:
-            params["status"] = status.value
+            body["status"] = status.value
         if members is not None:
-            params["members"] = members
+            body["members"] = members
         if due_date is not None:
-            params["due_date"] = due_date
+            body["due_date"] = due_date
         if board_id is not None:
-            params["board_id"] = board_id
+            body["board_id"] = board_id
 
-        response = self._http.put(f"/issues/{issue_id}", params=params)
+        response = self._http.put(f"/issues/{issue_id}", json=body)
         self._raise_for_status(response, issue_id=issue_id)
         return IssueData.from_dict(response.json())
 

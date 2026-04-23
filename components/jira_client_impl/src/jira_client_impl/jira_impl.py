@@ -341,14 +341,18 @@ class JiraClient:
         status: Status | None = None,
         members: list[str] | None = None,
         due_date: str | None = None,
-        board_id: str | None = None,  # noqa: ARG002
+        board_id: str | None = None,
     ) -> JiraIssue:
         # A board is a required field in Jira, and likely all other issue tracker implementations
         """Create a new Jira issue and return it as a JiraIssue."""
-        # required fields -- title and issue type
+        # Use board_id as project key if provided, otherwise use OPS as default
+        project_key = board_id or "OPS"
+
+        # required fields -- title, issue type, and project
         fields: dict[str, Any] = {
+            "project": {"key": project_key},
             "summary": title,
-            "issuetype": {"name": "Issue"},
+            "issuetype": {"name": "Task"},
         }
         if desc:
             # Jira Cloud expects Atlassian Document Format for description

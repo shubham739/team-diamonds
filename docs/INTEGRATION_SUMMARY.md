@@ -18,12 +18,12 @@ A complete **chat-to-issues integration component** that bridges the chat vertic
 
 ### API Contracts
 
-**Issue Tracker Side (✅ Uses Shared API)**
+**Issue Tracker Side (Uses Shared API)**
 - Uses `ospd-issue-tracker-api` from `https://github.com/tatyanacthomas/ospd_issue_tracker.git`
 - Your `JiraServiceAdapter` already implements this
 - Works with any team's tracker (Jira, Trello, etc.)
 
-**Chat Side (⚠️ Local ABC, Temporary)**
+**Chat Side ( Local ABC, Temporary)**
 - Defined locally in `chat_client.py` (matches HW3 spec interface)
 - When chat teams publish `ospd-chat-api`, we'll:
   1. Add it as a dependency
@@ -31,13 +31,22 @@ A complete **chat-to-issues integration component** that bridges the chat vertic
   3. Update imports
   4. Everything else stays the same
 
+## Integration Capabilities
+
+### Tracker → Chat
+- **Post issues to channel** — Fetch issues from tracker and post summaries to a chat channel
+- **Post single issue** — Share a specific issue in chat
+
+### Chat → Tracker
+- **Create issue from message** — Turn a chat message into a tracker issue
+- **Create from latest message** — Quick issue creation from most recent channel message
+
 ## Files Created
 
 ```
 components/chat_to_issues_integration/
 ├── pyproject.toml                    # Component config + dependencies
 ├── README.md                         # Full documentation
-├── INTEGRATION_SUMMARY.md            # This file
 ├── demo.py                           # Runnable demo
 ├── src/chat_to_issues_integration/
 │   ├── __init__.py                   # Public exports
@@ -54,10 +63,10 @@ components/chat_to_issues_integration/
 
 ```
 20 tests, 100% coverage, all passing
-✓ User isolation verified
-✓ All CRUD operations tested
-✓ Integration flows validated
-✓ Ruff clean
+ User isolation verified
+ All CRUD operations tested
+ Integration flows validated
+ Ruff clean
 ```
 
 ## Usage Example
@@ -82,7 +91,7 @@ msg = chat.send_message(channel.id, "Add export to CSV")
 issue = app.create_issue_from_message(msg.id)
 ```
 
-## Next Steps
+## Next Steps for Cross-Vertical Integration
 
 ### 1. Real Slack Integration
 Implement `SlackChatClient(ChatClient)` using `slack-sdk` (already installed):
@@ -109,68 +118,39 @@ app = IntegrationApp(tracker_client=tracker, chat_client=chat)
 # Everything else works identically
 ```
 
-### 2. Deploy as FastAPI Service
+### 2. Integration with Other Teams' Verticals
 
+**To use another team's tracker (e.g., Trello):**
 ```python
-from fastapi import FastAPI, Depends
-from chat_to_issues_integration import IntegrationApp
-from jira_service_adapter.adapter import get_client as get_tracker
-from slack_chat_client import SlackChatClient
+from trello_service_adapter import get_client as get_trello_client
 
-app = FastAPI()
-
-def get_integration_app(
-    user_id: str = Depends(get_current_user),
-    tracker_token: str = Depends(get_tracker_token),
-    slack_token: str = Depends(get_slack_token),
-) -> IntegrationApp:
-    tracker = get_tracker_for_user(user_id, tracker_token)
-    chat = SlackChatClient(token=slack_token)
-    return IntegrationApp(tracker_client=tracker, chat_client=chat)
-
-@app.post("/post-issues")
-def post_issues(
-    channel_id: str,
-    app: IntegrationApp = Depends(get_integration_app),
-):
-    return app.post_issues_to_channel(channel_id)
+tracker = get_trello_client()  # Trello team's adapter
+chat = MockChatClient(user_id="alice")
+app = IntegrationApp(tracker_client=tracker, chat_client=chat)
+# Same IntegrationApp, different tracker
 ```
 
-### 3. Add AI Client
-Integrate OpenAI/Claude for intelligent issue triage:
-
+**To use another team's chat (e.g., Discord):**
 ```python
-class IntegrationApp:
-    def __init__(self, tracker_client, chat_client, ai_client):
-        self._tracker = tracker_client
-        self._chat = chat_client
-        self._ai = ai_client
-    
-    def triage_issue_from_message(self, message_id: str) -> Issue:
-        msg = self._chat.get_message(message_id)
-        # Use AI to extract title, description, priority
-        analysis = self._ai.analyze(msg.text)
-        return self._tracker.create_issue(
-            title=analysis.title,
-            desc=analysis.description,
-            status=analysis.priority,
-        )
+from discord_chat_client import DiscordChatClient
+
+tracker = get_tracker()
+chat = DiscordChatClient(token=user_discord_token)  # Discord team's impl
+app = IntegrationApp(tracker_client=tracker, chat_client=chat)
+# Same IntegrationApp, different chat platform
 ```
 
-### 4. Telemetry
-Add request latency and success/failure rate tracking per HW3 requirements.
+## HW3 Cross-Vertical Integration Checklist
 
-## HW3 Deliverable Checklist
-
-- ✅ **Cross-vertical integration** — Chat + Issue Tracker wired together
-- ✅ **Dependency injection** — Works with any tracker + any chat impl
-- ✅ **User isolation** — Per-user instances, no shared state
-- ✅ **Tests** — 20 tests, 100% coverage
-- ✅ **Documentation** — README + demo
-- ⏳ **Real Slack client** — Next step
-- ⏳ **AI integration** — Next step
-- ⏳ **Deployment + IaC** — Next step
-- ⏳ **Telemetry** — Next step
+-  **Integration component created** — Bridges chat + issue tracker
+-  **Dependency injection** — Works with any tracker + any chat impl
+-  **User isolation** — Per-user instances, no shared state
+-  **Uses shared issue tracker API** — `ospd-issue-tracker-api`
+-  **Chat ABC defined** — Ready for shared `ospd-chat-api` when available
+-  **Tests** — 20 tests, 100% coverage
+-  **Documentation** — README + demo
+-  **Real Slack client** — Next step
+-  **Integration tests with real APIs** — Next step
 
 ## Running
 
