@@ -320,7 +320,7 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
       - lint:
           requires:
             - build
@@ -329,7 +329,7 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
       - unit_test:
           requires:
             - build
@@ -338,7 +338,7 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
       - circleci_test:
           requires:
             - unit_test
@@ -348,7 +348,7 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
       - integration_test:
           requires:
             - circleci_test
@@ -358,7 +358,7 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
       - report_summary:
           requires:
             - unit_test
@@ -369,7 +369,7 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
       - deploy:
           requires:
             - report_summary
@@ -379,4 +379,4 @@ workflows:
               only:
                 - main
                 - HW-2
-                - chz9577-hw3-AI
+                - tct297/hw3/verification
