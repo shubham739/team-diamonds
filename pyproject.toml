@@ -4,12 +4,18 @@ version = "0.1.0"
 description = "Template Repositiory for an Issue Tracker client"
 requires-python = ">=3.12"
 dependencies = [
+    "mangum",
+    "fastapi",
     "work-mgmt-client-interface",
     "jira-client-impl",
+    "jira-service",
+    "jira-service-api-client",
+    "jira-service-adapter",
     "fastapi[standard]>=0.100.0",
     "requests>=2.31.0",
-    "authlib>=1.2.0",
     "python-dotenv>=1.0.0",
+    "uvicorn[standard]>=0.30.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +24,7 @@ dev = [
     "mkdocs-material>=9.6.15",
     "mkdocstrings-python>=1.16.12",
     "mypy>=1.17.0",
+    "openapi-python-client>=0.21.0",
     "pymdown-extensions>=10.16.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
@@ -29,13 +36,16 @@ dev = [
 members = [
     "components/work_mgmt_client_interface",
     "components/jira_client_impl",
+    "components/jira_service",
+    "components/jira_service_api_client",
+    "components/jira_service_adapter",
 ]
 
 [tool.ruff]
 line-length = 130
 target-version = "py312"
 #main.py is being used for development and debugging and does not need to be checked by a strict ruff
-extend-exclude = ["main.py"] 
+extend-exclude = ["main.py", "components/jira_service_api_client"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -44,7 +54,16 @@ ignore = [
   "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
   "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004"] }
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117"] }
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "jira_client_impl",
+    "work_mgmt_client_interface",
+    "jira_service",
+    "jira_service_api_client",
+    "jira_service_adapter",
+]
 
 [tool.ruff.lint.pylint]
 max-args = 8
@@ -52,18 +71,33 @@ max-args = 8
 [tool.mypy]
 strict = true
 explicit_package_bases = true # Required for src layout
-mypy_path = ["components/work_mgmt_client_interface/src", "components/jira_client_impl/src"]
+mypy_path = [
+    "components/work_mgmt_client_interface/src",
+    "components/jira_client_impl/src",
+    "components/jira_service/src",
+    "components/jira_service_api_client",
+    "components/jira_service_adapter/src",
+]
 ignore_missing_imports = false
 warn_unused_ignores = false
+exclude = [
+    "main.py",
+]
 
 
 [tool.pytest.ini_options]
 pythonpath = [
-    ".", 
-    "components"
+    ".",
+    "components",
+    "components/work_mgmt_client_interface/src",
+    "components/jira_client_impl/src",
+    "components/jira_service/src",
+    "components/jira_service_api_client",
+    "components/jira_service_adapter/src",
 ]
 testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+# Remove --cov-fail-under from here — it already lives in [tool.coverage.report]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
     "integration: marks tests as integration tests (medium speed, real dependencies)",
@@ -74,7 +108,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["components"]
-omit = ["*/tests/*", "*/__main__.py"]
+omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*", "components/jira_service_api_client/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.
@@ -82,6 +116,7 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
+    "if interactive:", 
     # Ignore abstract methods decorators
     "@abstractmethod",
     "@(abc\\.)?abstractmethod",
@@ -95,6 +130,9 @@ exclude_lines = [
 [tool.uv.sources]
 work-mgmt-client-interface = {workspace = true}
 jira-client-impl = {workspace = true}
+jira-service = {workspace = true}
+jira-service-api-client = {workspace = true}
+jira-service-adapter = {workspace = true}
 
 [tool.fastapi]
-entrypoint = "main:app"
+entrypoint = "jira_service.main:app"

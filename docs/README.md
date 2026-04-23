@@ -1,58 +1,165 @@
 
 # Team Diamonds
 
-### Team Members:
-* Subhradeep Acharjee  
-* Ethan Bell 
-* Shubham Tanwar  
-* Tanya Thomas  
-* Conor Zhang   
+### Team Members
+* Subhradeep Acharjee
+* Ethan Bell
+* Shubham Tanwar
+* Tanya Thomas
+* Conor Zhang
+
+---
+
+## Overview
+
+This project is an AI assistant designed to help people manage their tasks and
+to-dos from a variety of sources in one place. Rather than switching between
+tools, the assistant connects to the platforms people already use and provides a
+unified interface for managing work.
+
+The first integration is issue trackers (starting with Jira), with plans to
+expand to email, messaging, and code reviews over time.
+
+---
+
+## Motivation
+
+Modern work is spread across many tools — issue trackers, inboxes, chat apps,
+pull requests. Keeping track of everything requires constant context switching.
+This assistant aims to bring those sources together so that managing your work
+feels seamless, regardless of which platforms your team uses.
+
+---
+
+## Repository Structure
+
+- components/
+    - work_mgmt_client_interface/                                  # Vendor-neutral interfaces and shared domain models.
+    - jira_client_impl/                                           # Direct Jira client implementation (local/library path).
+    - jira_service/                                               # FastAPI service exposing Jira operations over HTTP.
+    - jira_service_api_client/                                    # Typed HTTP client for the service API.
+    - jira_service_adapter/                                       # Adapter that implements the common interface using the service client.
+
+- tests/
+    - unit/                                                       # Unit test suite.
+    - integration/                                                # Integration tests (including live Jira scenarios in CI contexts).
+    - e2e/                                                        # End-to-end workflow tests.
+
+- docs/
+    - Architecture, component docs, contribution guidance, and implementation notes.
+
+- Root config/infrastructure
+    - Workspace/tooling config, CI pipeline, container/deployment config, and project metadata.
 
 
-### Overview:
+---
 
-This project is an AI assistant designed to help people manage their tasks and to-dos from a variety of sources in one place. Rather than switching between tools, the assistant connects to the platforms people already use and provides a unified interface for managing work.
+## How It Works
 
-The project is being built incrementally. The first integration is issue trackers (starting with Jira), with plans to expand to email, messaging, and code reviews over time.
+The project uses a layered architecture for location transparency:
 
-### Motivation:
+| Layer | Package | Purpose |
+|-------|---------|---------|
+| 1 | `work-mgmt-client-interface` | Abstract contract — defines what a client does |
+| 2 | `jira-client-impl` | Local Jira implementation — calls Jira REST API directly |
+| 3 | `jira-service` | FastAPI service — exposes layer 2 over HTTP |
+| 4 | `jira-service-api-client` | Type-safe HTTP client for the FastAPI service |
+| 5 | `jira-service-adapter` | Adapter — wraps layer 4 behind the layer 1 interface |
 
-Modern work is spread across many tools — issue trackers, inboxes, chat apps, pull requests. Keeping track of everything requires constant context switching. This assistant aims to bring those sources together so that managing your work feels seamless, regardless of which platforms your team uses.
+Consumers use the same `get_client()` call for local or remote access.
 
-### Repository Structure:
+```python
+# Option A — local library
+from jira_client_impl import get_client
 
+# Option B — remote service
+from jira_service_adapter import get_client
+
+client = get_client()   # same interface, same call sites
 ```
 
-├── components/
-│   ├── work_mgmt_client_interface/   # Vendor-neutral interface contracts
-│   │   ├── src/
-│   │   ├── tests/
-│   │   └── README.md
-│   │
-│   └── jira_client_impl/             # Jira implementation of the interface
-│       ├── src/
-│       ├── tests/
-│       └── README.md
-│
-├── DESIGN.md                         # Architecture and design decisions
-├── CONTRIBUTING.md                   # Contribution guide and rules
-└── README.md                         # This file
+---
+
+## Deployment
+
+The FastAPI service is deployed as a Docker container via AWS Lambda.
+
+| Item | Value |
+|------|-------|
+| Platform | AWS Lambda |
+| Service URL | Configured via AWS Lambda and API Gateway |
+| OAuth Redirect URI | Configured via `JIRA_OAUTH_REDIRECT_URI` environment variable for OAuth callback handling |
+| Health check | `GET /health` → `{"status": "ok"}` |
+| OpenAPI spec | `GET /openapi.json` |
+| Interactive docs | `GET /docs` |
+
+### OAuth2 Redirect URIs
+
+Register **both** of the following in your Atlassian OAuth2 app settings:
+
+- **Local:** `http://localhost:8000/auth/callback`
+- **Production:** `https://team-diamonds.onrender.com/auth/callback`
+
+Use the `JIRA_OAUTH_REDIRECT_URI` environment variable to select the correct
+one at runtime.
+
+---
+
+## CI/CD Pipeline (CircleCI)
+
+The CircleCI pipeline runs on every push and is **publicly visible**.
+
+```
+build → lint → unit_test → circleci_test → deploy (hw2 branch only)
+                                        └── report_summary
 ```
 
-Each component has its own README with setup instructions, usage examples, and test commands.
+| Job | Description |
+|-----|-------------|
+| `build` | Installs uv + all workspace dependencies |
+| `lint` | Runs `ruff check .` |
+| `unit_test` | Runs component unit tests, enforces 85% coverage, runs mypy |
+| `circleci_test` | Runs all tests not requiring local credentials |
+| `deploy` | Triggers Render deploy hook (hw2 branch only, after tests pass) |
+| `report_summary` | Aggregates test and coverage report artifacts |
 
-### How it Works:
+Full integration tests against the live Jira API run only on `main` via the
+`full_integration` workflow using the `jira-client` CircleCI context.
 
-The project is split into two layers:
+---
 
-**Interface layer** defines a common contract for what a client must be able to do — fetch issues, create them, update them, delete them — without being tied to any specific platform.
+## Quick Start (Local Development)
 
-**Implementation layer** fulfills that contract for a specific platform. Today that is Jira. Each implementation is a self-contained package that can be swapped out without changing any of the application code that depends on the interface.
+```bash
+git clone https://github.com/shubham739/team-diamonds.git
+cd team-diamonds
 
-This design means adding a new integration (Linear, GitHub Issues, Gmail, Slack, etc.) only requires writing a new implementation package — the rest of the system stays the same.
+# Install all workspace packages + dev tools
+uv sync --all-packages --extra dev
 
-### For More Information:
+# Copy and fill in your credentials
+cp .venv/.env.example .venv/.env   # edit with your values
 
-See `DESIGN.md` for a more detailed breakdown of the architecture and the reasoning behind key decisions.
-See `CONTRIBUTING.md` for inrformation about how to contribute to the project. 
+# Run the service
+uvicorn components.jira_service.src.jira_service.main:app --reload
 
+# Run all tests
+pytest
+
+# Type-check
+mypy components/
+
+# Lint
+ruff check .
+```
+
+---
+
+## Further Reading
+
+- [Design & Architecture](DESIGN.md)
+- [Jira Service](JIRA_SERVICE.md)
+- [Jira Service API Client](JIRA_SERVICE_API_CLIENT.md)
+- [Jira Service Adapter](JIRA_SERVICE_ADAPTER.md)
+- [Interface Contract](INTERFACE.md)
+- [Contributing Guide](CONTRIBUTING.md)

@@ -4,20 +4,21 @@ This module contains comprehensive unit tests for the core business logic
 of the JiraClient class, mocking all external dependencies.
 """
 
-#For now, we can run the tests in this file with this shell command "python -m pytest components/jira_client_impl/tests/test_core_methods.py -v"
+# For now, we can run the tests in this file with this shell command "python -m pytest components/jira_client_impl/tests/test_core_methods.py -v"
 
 import os
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_impl import IssueNotFoundError, JiraClient, JiraError, _text_to_adf, get_client
 from jira_client_impl.jira_issue import JiraIssue
 from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 
-#Fixture for mock tests
+# Fixture for mock tests
 @pytest.fixture
 def jira_client() -> JiraClient:
     """Return a JiraClient with mocked internal API methods."""
@@ -35,7 +36,8 @@ def jira_client() -> JiraClient:
 
     return client
 
-#Tests for get_issues method
+
+# Tests for get_issues method
 def test_get_issues_builds_correct_jql(jira_client: Any) -> None:
     """Setup: Tell our mocked _get method what to return when called."""
     jira_client._get.return_value = {
@@ -50,11 +52,12 @@ def test_get_issues_builds_correct_jql(jira_client: Any) -> None:
     # Assert: Did it yield our mock issues?
     assert issues == ["MockIssue-TEST-1", "MockIssue-TEST-2"]
 
+
 def test_get_issues_pagination(jira_client: Any) -> None:
     """Setup: Simulate Jira returning data across two pages side_effect allows us to return different data on consecutive calls."""
     jira_client._get.side_effect = [
-        {"issues": [{"key": "TEST-1"}, {"key": "TEST-2"}], "total": 3}, # First API call
-        {"issues": [{"key": "TEST-3"}], "total": 3},                     # Second API call
+        {"issues": [{"key": "TEST-1"}, {"key": "TEST-2"}], "total": 3},  # First API call
+        {"issues": [{"key": "TEST-3"}], "total": 3},  # Second API call
     ]
 
     # Act: Ask for up to 5 results
@@ -72,7 +75,9 @@ def test_get_issues_when_no_issues_exits(jira_client: Any) -> None:
 
     assert result == []
 
-#--------------------------- tests for get_client function --------------------------
+
+# --------------------------- tests for get_client function --------------------------
+
 
 def test_get_client_raises_when_env_vars_missing_sa() -> None:
     """Raise EnvironmentError when required env vars are not set."""
@@ -81,7 +86,7 @@ def test_get_client_raises_when_env_vars_missing_sa() -> None:
         os.environ.pop(var, None)
 
     # Assert: Should raise EnvironmentError listing the missing variables
-    with pytest.raises(EnvironmentError, match = "Missing required environment variables"):
+    with pytest.raises(EnvironmentError, match="Missing required environment variables"):
         get_client(interactive=False)
 
 
@@ -98,7 +103,9 @@ def test_get_client_succeeds_when_env_vars_present_sa() -> None:
     # Assert: Should return a properly instantiated JiraClient
     assert isinstance(client, JiraClient)
 
-#--------------------------- tests for sanitize_input function --------------------------
+
+# --------------------------- tests for sanitize_input function --------------------------
+
 
 def test_sanitize_input_escapes_special_chars_sa() -> None:
     """Test that user input is sanitized for jql."""
@@ -110,7 +117,8 @@ def test_sanitize_input_escapes_special_chars_sa() -> None:
     # Assert: The double quotes should be escaped with a backslash
     assert '\\"' in result
 
-#--------------------------- tests for _raise_for_status method --------------------------
+
+# --------------------------- tests for _raise_for_status method --------------------------
 
 
 def test_raise_for_status_ok_response_does_not_raise_sa() -> None:
@@ -148,7 +156,9 @@ def test_raise_for_status_500_raises_jira_error_sa() -> None:
     with pytest.raises(JiraError):
         JiraClient._raise_for_status(mock_response)
 
-#-------------------------- tests for update_issue method --------------------------
+
+# -------------------------- tests for update_issue method --------------------------
+
 
 def test_update_issue_title_sa(jira_client: Any) -> None:
     """Test that update_issue correctly sends an updated title field to the Jira API."""
@@ -180,7 +190,6 @@ def test_update_issue_with_status_calls_transition_sa(jira_client: Any) -> None:
     jira_client._apply_status_transition.assert_called_once_with("TEST-1", Status.COMPLETE)
 
 
-
 def test_update_issue_with_no_changes_skips_put_sa(jira_client: Any) -> None:
     """Test that _put is NOT called when the IssueUpdate has no changed fields."""
     # Setup: Mock _put and get_issue
@@ -194,7 +203,8 @@ def test_update_issue_with_no_changes_skips_put_sa(jira_client: Any) -> None:
     # Assert: _put should never be called when there's nothing to update
     jira_client._put.assert_not_called()
 
-#-------------------- tests for _apply_status_transition method --------------------
+
+# -------------------- tests for _apply_status_transition method --------------------
 
 
 def test_status_transition_finds_correct_transition_sa(jira_client: Any) -> None:
@@ -209,7 +219,7 @@ def test_status_transition_finds_correct_transition_sa(jira_client: Any) -> None
     # transition to IN_PROGRESS
     jira_client._apply_status_transition("TEST-5", Status.IN_PROGRESS)
 
-    #Checking that the correct transition ID was posted
+    # Checking that the correct transition ID was posted
     jira_client._post.assert_called_once()
     call_args = jira_client._post.call_args
     transition_id = call_args[0][1]["transition"]["id"]
@@ -234,21 +244,23 @@ def test_status_transition_raises_error_when_no_matching_transition_sa(jira_clie
     # Check that the error message indicates no transition found
     assert "No transition" in str(exc_info.value)
 
-#-------------------- tests for _text_to_adf method --------------------
+
+# -------------------- tests for _text_to_adf method --------------------
+
 
 def test_text_to_adf_sa() -> None:
     """Test a simple string that is successfully converted to adf forrmat."""
-    ip_text="testing adf formatting"
-    expected_adf={
-        "type":"doc",
-        "version":1,
-        "content":[
+    ip_text = "testing adf formatting"
+    expected_adf = {
+        "type": "doc",
+        "version": 1,
+        "content": [
             {
-                "type":"paragraph",
-                "content":[
+                "type": "paragraph",
+                "content": [
                     {
-                        "text":ip_text,
-                        "type":"text",
+                        "text": ip_text,
+                        "type": "text",
                     },
                 ],
             },
@@ -260,18 +272,19 @@ def test_text_to_adf_sa() -> None:
     # Assert: the output ADF should match our expected structure
     assert result == expected_adf
 
+
 def test_text_to_adf_empty_string_sa() -> None:
     """Test an empty string input to see if it returns a valid ADF with empty string text."""
-    expected_adf={
-        "type":"doc",
-        "version":1,
-        "content":[
+    expected_adf = {
+        "type": "doc",
+        "version": 1,
+        "content": [
             {
-                "type":"paragraph",
-                "content":[
+                "type": "paragraph",
+                "content": [
                     {
-                        "text":"",
-                        "type":"text",
+                        "text": "",
+                        "type": "text",
                     },
                 ],
             },
@@ -280,17 +293,18 @@ def test_text_to_adf_empty_string_sa() -> None:
     result = _text_to_adf("")
     assert result == expected_adf
 
+
 def test_text_to_adf_multiline_string_sa(jira_client: Any) -> None:
     """Test a multiline string - _text_to_adf wraps entire text in single paragraph."""
-    ip_text="line 1\nline 2\nline 3"
-    expected_adf={
-        "type":"doc",
-        "version":1,
-        "content":[
+    ip_text = "line 1\nline 2\nline 3"
+    expected_adf = {
+        "type": "doc",
+        "version": 1,
+        "content": [
             {
-                "type":"paragraph",
-                "content":[
-                    {"text":ip_text, "type":"text"},
+                "type": "paragraph",
+                "content": [
+                    {"text": ip_text, "type": "text"},
                 ],
             },
         ],
@@ -298,21 +312,24 @@ def test_text_to_adf_multiline_string_sa(jira_client: Any) -> None:
     result = _text_to_adf(ip_text)
     assert result == expected_adf
 
+
 def test_text_to_adf_non_string_input_sa() -> None:
     """Test non-string input to see if it raises the expected error."""
     with pytest.raises(JiraError) as exc_info:
-    # passing an integer instead of a string
-       _text_to_adf(12345)  # type: ignore[arg-type]
+        # passing an integer instead of a string
+        _text_to_adf(12345)  # type: ignore[arg-type]
 
     assert str(exc_info.value) == "Input must be a string"
 
-def test_status_happy_path()-> None:
+
+def test_status_happy_path() -> None:
     """Test Issue.status property for a successful mapping."""
     raw_data = {"status": {"name": "in progress"}}
     issue = JiraIssue("PROJ-1", raw_data, "https://test.net")
     assert issue.status == Status.IN_PROGRESS
 
-def test_status_fallback_path()-> None:
+
+def test_status_fallback_path() -> None:
     """Test Issue.status property for missing or unknown status data."""
     # 1. Test an unknown string (hits the .get(..., Status.TODO) line)
     issue_unknown = JiraIssue("PROJ-2", {"status": {"name": "Ghost"}}, "https://test.net")
@@ -322,7 +339,8 @@ def test_status_fallback_path()-> None:
     issue_missing = JiraIssue("PROJ-3", {}, "https://test.net")
     assert issue_missing.status == Status.TODO
 
-def test_jira_issue_basic_coverage()-> None:
+
+def test_jira_issue_basic_coverage() -> None:
     """Test various properties for JiraIssue class."""
     # A single raw_data blob containing every field we care about
     raw_data = {
@@ -343,6 +361,7 @@ def test_jira_issue_basic_coverage()-> None:
     assert issue.due_date == "2026-12-31"
     assert issue.description == "Standard string description"
 
+
 def test_jira_issue_empty_fallbacks() -> None:
     """Verify correct behavior when Issue properties are missing."""
     # Empty data hits all the 'get(..., "")' and 'isinstance' fallback lines
@@ -356,6 +375,7 @@ def test_jira_issue_empty_fallbacks() -> None:
 
     # Touching __repr__ hits the base class code and uses id/title/status
     assert "PROJ-EMPTY" in repr(issue)
+
 
 def test_description_adf_recursion_coverage() -> None:
     """Test recursive behavior of Issue.description property."""
@@ -375,17 +395,18 @@ def test_description_adf_recursion_coverage() -> None:
     # This call executes the recursive _extract_adf_text function
     assert issue.description == "Hello \nWorld"
 
+
 @patch("jira_client_impl.jira_impl.JiraClient._post")
 @patch("jira_client_impl.jira_impl.JiraClient._apply_status_transition")
 @patch("jira_client_impl.jira_impl.JiraClient.get_issue")
 def test_create_issue_full_coverage(
     mock_get: MagicMock,
-    mock_transition : MagicMock,
-    mock_post : MagicMock,
-    jira_client : Any,
-    ) -> None:
+    mock_transition: MagicMock,
+    mock_post: MagicMock,
+    jira_client: Any,
+) -> None:
     """Test create_issue method with mock http messages."""
-    #Cast as any because mypy doesn't play well with MagicMock
+    # Cast as any because mypy doesn't play well with MagicMock
     client_as_any: Any = jira_client
     # --- MANUALLY INJECT THE MOCK ---
     client_as_any._post = mock_post
@@ -421,9 +442,11 @@ def test_create_issue_full_coverage(
     mock_transition.assert_called_once_with("PROJ-101", Status.IN_PROGRESS)
     mock_get.assert_called_once_with("PROJ-101")
 
-#----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
 #                       JIRA BOARD TESTS
-#----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+
 
 @pytest.fixture
 def jira_board() -> Any:
@@ -441,6 +464,7 @@ def jira_board() -> Any:
 
 
 # -------------------- tests for properties --------------------
+
 
 def test_jira_board_id_property_sa(jira_board: Any) -> None:
     """Verify that the id property returns the correct board ID."""
@@ -478,6 +502,7 @@ def test_columns_returns_copy_not_original_sa(jira_board: Any) -> None:
 
 
 # -------------------- tests for list_issues --------------------
+
 
 def test_list_issues_returns_all_issues_sa(jira_board: Any) -> None:
     """Test that list_issues returns all issues when no status filter is given."""
@@ -563,6 +588,7 @@ def test_list_issues_calls_get_board_issues_with_correct_fields_sa(jira_board: A
 
 # -------------------- tests for get_issue --------------------
 
+
 def test_get_issue_delegates_to_jira_client_sa(jira_board: Any) -> None:
     """Test that get_issue calls JiraClient.get_issue with the correct issue ID."""
     # Setup: Mock the client's get_issue to return a mock issue
@@ -588,6 +614,7 @@ def test_get_issue_raises_when_issue_not_found_sa(jira_board: Any) -> None:
     with pytest.raises(IssueNotFoundError):
         jira_board.get_issue("FAKE-999")
 
+
 def test_board_create_issue_sa(jira_board: Any) -> None:
     """Test that JiraBoard delegates create_issue to the underlying client."""
     jira_board._client.create_issue.return_value = "MockCreatedIssue"
@@ -595,7 +622,9 @@ def test_board_create_issue_sa(jira_board: Any) -> None:
     result = jira_board.create_issue(title="New Issue")
 
     jira_board._client.create_issue.assert_called_once_with(
-        title="New Issue", description="", status=Status.TODO,
+        title="New Issue",
+        description="",
+        status=Status.TODO,
     )
     assert result == "MockCreatedIssue"
 
@@ -610,7 +639,9 @@ def test_board_update_issue_sa(jira_board: Any) -> None:
     jira_board._client.update_issue.assert_called_once_with("TEST-1", update)
     assert result == "MockUpdatedIssue"
 
+
 # -------------------- tests for raw HTTP network methods --------------------
+
 
 @patch("jira_client_impl.jira_impl.requests.Session")
 def test_raw_http_methods_sa(mock_session_class: MagicMock) -> None:
@@ -628,7 +659,7 @@ def test_raw_http_methods_sa(mock_session_class: MagicMock) -> None:
     mock_post_resp.json.return_value = {"action": "post"}
     mock_session.post.return_value = mock_post_resp
 
-    mock_put_resp = MagicMock(status_code=204, ok=True) # 204 triggers the NO_CONTENT branch
+    mock_put_resp = MagicMock(status_code=204, ok=True)  # 204 triggers the NO_CONTENT branch
     mock_session.put.return_value = mock_put_resp
 
     mock_delete_resp = MagicMock(status_code=204, ok=True)

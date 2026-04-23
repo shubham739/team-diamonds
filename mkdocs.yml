@@ -7,3 +7,6 @@ nav:
   - Components:
     - Interface: INTERFACE.md
     - Jira Implementation: IMPLEMENTATION_JIRA.md
+    - Jira Service: JIRA_SERVICE.md
+    - Jira Service API Client: JIRA_SERVICE_API_CLIENT.md
+    - Jira Service Adapter: JIRA_SERVICE_ADAPTER.md

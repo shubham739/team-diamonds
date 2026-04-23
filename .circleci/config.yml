@@ -2,8 +2,6 @@
 # See: https://circleci.com/docs/reference/configuration-reference
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#jobs-overview & https://circleci.com/docs/reference/configuration-reference/#jobs
 jobs:
   
   # Job 1: Setup environment
@@ -18,26 +16,23 @@ jobs:
             curl -LsSf https://astral.sh/uv/install.sh | sh
             echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
             source $BASH_ENV
-            uv --version # Verify installation
+            uv --version
       - run:
           name: "Create venv and install dependencies"
           command: |
-            # Create venv in the default .venv location
             uv venv --python 3.12
             source .venv/bin/activate
-            # Install all dependencies including dev/test extras
             uv sync --all-packages --extra dev --verbose
       - run:
           name: "Verify Installation (Optional)"
           command: |
             source .venv/bin/activate
-            uv tree # Check if workspace members and tools are listed
+            uv tree
             ruff --version
             pytest --version
             mypy --version
             coverage --version
       - persist_to_workspace:
-          # Persist the entire project directory, including the populated .venv
           root: .
           paths:
             - .
@@ -71,7 +66,6 @@ jobs:
           name: "Execute unit test suite"
           command: |
             source .venv/bin/activate  
-            # Run only unit tests from components/ directories (fast, isolated tests)
             pytest components/ --cov=components --cov-report=xml --cov-report=term \
                      --junitxml=test-results/unit/junit.xml \
                      --cov-fail-under=85
@@ -79,12 +73,11 @@ jobs:
           name: "Run Static Analysis (mypy)"
           command: |
             source .venv/bin/activate
-            # Target specific source directories for mypy
             uv add types-requests
             mypy components/ --explicit-package-bases
       - store_test_results:
           path: test-results/unit
-      - store_artifacts: # Store coverage reports
+      - store_artifacts:
           path: coverage.xml
       - store_artifacts:
           path: test-results/unit
@@ -93,22 +86,18 @@ jobs:
   circleci_test:
     docker:
       - image: cimg/python:3.12
-    # Environment variables from the jira client context will be available here
     steps:
       - attach_workspace:
-          at: . # Attach the workspace persisted from 'build'
+          at: .
       - run:
           name: "Activate Venv and Create Test Results Directory"
           command: |
             source .venv/bin/activate
-            mkdir -p test-results/circleci # Separate directory for results
+            mkdir -p test-results/circleci
       - run:
           name: "Execute All Tests Except Local Credentials"
           command: |
             source .venv/bin/activate
-            # Run all tests from components/ and tests/ directories except those requiring local credentials
-            # This includes unit tests, integration tests, and e2e tests that work with env vars
-            # Coverage tracking enabled since this includes comprehensive unit tests
             pytest components/ tests/ -m "not local_credentials" \
                    --junitxml=test-results/circleci/junit.xml -v \
                    --cov=components --cov-report=term
@@ -117,14 +106,13 @@ jobs:
       - store_artifacts:
           path: test-results/circleci
 
-  # Job 5: Integration Tests with Real Credentials (Optional - Branch Restricted)
+  # Job 5: Integration Tests with Real Credentials
   integration_test:
     docker:
       - image: cimg/python:3.12
-    # Environment variables from the 'jira-client' context will be available here
     steps:
       - attach_workspace:
-          at: . # Attach the workspace persisted from 'build'
+          at: .
       - run:
           name: "Verify Environment Variables"
           command: |
@@ -139,14 +127,11 @@ jobs:
           name: "Activate Venv and Create Test Results Directory"
           command: |
             source .venv/bin/activate
-            mkdir -p test-results/integration # Separate directory for results
+            mkdir -p test-results/integration
       - run:
           name: "Execute Integration Test Suite with Real API Calls"
           command: |
             source .venv/bin/activate
-            # Run integration tests that require real JIRA API connectivity
-            # These will use environment variables for authentication
-            # Note: No coverage tracking for integration tests - they test component interactions
             pytest -m "integration and not local_credentials" \
                    --junitxml=test-results/integration/junit.xml -v \
                    --no-cov
@@ -155,27 +140,100 @@ jobs:
       - store_artifacts:
           path: test-results/integration
 
-  # Job 6: Report Summary
-  report_summary:
+  # Job 6: Deploy to AWS Lambda
+  deploy:
     docker:
-      - image: cimg/base:stable # Use a basic image for reporting
+      - image: cimg/python:3.12
+    environment:
+      AWS_DEFAULT_REGION: us-east-2
     steps:
       - attach_workspace:
-          at: . # Attach the workspace
+          at: .
+      - run:
+          name: "Install AWS CLI & uv"
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            sudo ./aws/install
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
+      - run:
+          name: "Package Lambda zip"
+          command: |
+            export PATH="$HOME/.cargo/bin:$PATH"
+            source .venv/bin/activate
+            mkdir -p lambda_package/jira_service
+            # Copy jira_service as a package (preserves internal imports)
+            cp components/jira_service/src/jira_service/*.py \
+              lambda_package/jira_service/
+            # Ensure it's a proper package
+            touch lambda_package/jira_service/__init__.py
+            # Copy handler.py to root so Lambda can find it
+            cp components/jira_service/src/jira_service/main.py lambda_package/
+            cp components/jira_service/src/jira_service/handler.py \
+              lambda_package/handler.py
+            # Copy other local packages
+            cp -r components/jira_client_impl/src/jira_client_impl \
+              lambda_package/jira_client_impl
+            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface \
+              lambda_package/work_mgmt_client_interface
+            cp -r components/jira_service_adapter/src/jira_service_adapter \
+              lambda_package/jira_service_adapter
+            # Install PyPI dependencies
+            uv pip install mangum fastapi python-dotenv requests \
+              "pydantic==2.10.6" "pydantic-core==2.27.2" \
+              --python-platform x86_64-unknown-linux-gnu \
+              --python 3.12 \
+              -t lambda_package/
+            echo "--- lambda_package contents ---"
+            ls -la lambda_package/
+            ls -la lambda_package/jira_service/
+            find lambda_package/ -name "_pydantic_core*.so" | head -5
+            cd lambda_package && zip -r ../deployment.zip . && cd ..
+            ls -la deployment.zip
+      - run:
+          name: "Deploy to AWS Lambda"
+          command: |
+            aws lambda update-function-configuration \
+              --function-name team-diamonds-deployment \
+              --runtime python3.12 \
+              --region us-east-2 \
+              > /dev/null
+            aws lambda update-function-code \
+              --function-name team-diamonds-deployment \
+              --zip-file fileb://deployment.zip \
+              --region us-east-2 \
+              > /dev/null
+            aws lambda wait function-updated \
+              --function-name team-diamonds-deployment \
+              --region us-east-2
+            echo "Lambda deploy complete."
+      - run:
+          name: "Verify /health endpoint"
+          command: |
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_GATEWAY_URL/health)
+            [ "$STATUS" = "200" ] && echo "Health check passed!" || (echo "Health check failed: $STATUS" && exit 1)
+
+  # Job 7: Report Summary
+  report_summary:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - attach_workspace:
+          at: .
       - run:
           name: "Summarize Unit Test Results"
           command: |
             echo "--- Unit Test Summary ---"
             if [ -f test-results/unit/junit.xml ]; then
               echo "Unit test results file found."
-              # Extract test count if possible
               if command -v xmllint > /dev/null; then
                 tests=$(xmllint --xpath "string(//testsuite/@tests)" test-results/unit/junit.xml 2>/dev/null || echo "N/A")
                 failures=$(xmllint --xpath "string(//testsuite/@failures)" test-results/unit/junit.xml 2>/dev/null || echo "N/A")
                 echo "Tests: $tests, Failures: $failures"
               fi
             else
-              echo "Unit test results file (test-results/unit/junit.xml) not found."
+              echo "Unit test results file not found."
             fi
       - run:
           name: "Summarize CircleCI Test Results"
@@ -200,19 +258,17 @@ jobs:
           command: |
             echo "--- Coverage Summary ---"
             if [ -f coverage.xml ]; then
-               echo "Coverage XML found. Check artifacts for details."
-               # Extract overall line rate if xmllint is available
-               if command -v xmllint > /dev/null; then
-                 coverage_rate=$(xmllint --xpath "string(//coverage/@line-rate)" coverage.xml 2>/dev/null || echo "N/A")
-                 echo "Line Coverage Rate: $coverage_rate"
-               fi
+              echo "Coverage XML found. Check artifacts for details."
+              if command -v xmllint > /dev/null; then
+                coverage_rate=$(xmllint --xpath "string(//coverage/@line-rate)" coverage.xml 2>/dev/null || echo "N/A")
+                echo "Line Coverage Rate: $coverage_rate"
+              fi
             else
-               echo "Coverage XML not found."
+              echo "Coverage XML not found."
             fi
 
-# Orchestrate jobs using workflows
 workflows:
-  # Main workflow: Build, Lint, Test (runs on all branches)
+  # Runs on all branches except main and develop
   build_and_test:
     jobs:
       - build:
@@ -229,7 +285,6 @@ workflows:
               ignore:
                 - main
                 - develop
-
       - unit_test:
           requires:
             - build
@@ -238,17 +293,14 @@ workflows:
               ignore:
                 - main
                 - develop
-
       - circleci_test:
           requires:
-            - unit_test # Run after unit tests pass
+            - unit_test
           filters:
             branches:
               ignore:
                 - main
                 - develop
-
-      # Optional: Report summary after core tests
       - report_summary:
           requires:
             - unit_test
@@ -259,15 +311,15 @@ workflows:
                 - main
                 - develop
 
-  # Enhanced workflow: Full tests with real credentials (main/develop only)
+  # Full tests + deploy on HW-2 and main
   full_integration:
     jobs:
       - build:
           filters:
             branches:
               only:
-                - main # add other branches as needed
-
+                - main
+                - HW-2
       - lint:
           requires:
             - build
@@ -275,7 +327,7 @@ workflows:
             branches:
               only:
                 - main
-
+                - HW-2
       - unit_test:
           requires:
             - build
@@ -283,25 +335,25 @@ workflows:
             branches:
               only:
                 - main
-
+                - HW-2
       - circleci_test:
           requires:
             - unit_test
-          context: jira-client # Context containing Jira API credentials
+          context: jira-client
           filters:
             branches:
               only:
                 - main
-
+                - HW-2
       - integration_test:
           requires:
-            - circleci_test # Run after CircleCI tests pass
-          context: jira-client # Context containing Jira API credentials
+            - circleci_test
+          context: jira-client
           filters:
             branches:
               only:
                 - main
-                
+                - HW-2
       - report_summary:
           requires:
             - unit_test
@@ -311,3 +363,13 @@ workflows:
             branches:
               only:
                 - main
+                - HW-2
+      - deploy:
+          requires:
+            - report_summary
+          context: aws-deploy
+          filters:
+            branches:
+              only:
+                - main
+                - HW-2

@@ -1,6 +1,5 @@
 """Core board contract definitions and factory placeholder."""
 
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -16,6 +15,7 @@ class BoardColumn:
 
     status: Status
     name: str
+
 
 class Board(ABC):
     """Abstract base class for a board."""
@@ -38,6 +38,7 @@ class Board(ABC):
         """Board columns for showing the different statuses."""
         raise NotImplementedError
         # ---- Issue access ----
+
     @abstractmethod
     def list_issues(self, *, status: Status | None = None) -> list[Issue]:
         """Return issues on this board.
@@ -76,6 +77,7 @@ class Board(ABC):
     def delete_issue(self, issue_id: str) -> None:
         """Delete an issue from the board."""
         raise NotImplementedError
+
 
 def build_board(board_id: str, raw_data: dict[str, Any]) -> Board:
     """Build and returns a board object."""

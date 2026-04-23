@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jira-service-api-client"
+version = "0.1.0"
+description = "A client library for accessing Jira Service API"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.23.0,<0.29.0",
+    "attrs>=22.2.0",
+    "python-dateutil>=2.8.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["jira_service_api_client"]
