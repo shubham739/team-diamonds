@@ -60,7 +60,6 @@ line-length = 130
 target-version = "py312"
 #main.py is being used for development and debugging and does not need to be checked by a strict ruff
 extend-exclude = ["main.py", "components/jira_service_api_client"]
-extend-exclude = ["main.py", "components/jira_service_api_client"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -101,16 +100,7 @@ exclude = [
     "components/work_mgmt_client_interface",
     "components/jira_service_api_client",
 ]
-exclude = [
-    "main.py",
-    "components/work_mgmt_client_interface",
-    "components/jira_service_api_client",
-]
 
-[[tool.mypy.overrides]]
-module = ["api", "api.*"]
-ignore_missing_imports = true
-follow_imports = "skip"
 [[tool.mypy.overrides]]
 module = ["api", "api.*"]
 ignore_missing_imports = true
@@ -141,7 +131,6 @@ markers = [
 [tool.coverage.run]
 source = ["components"]
 omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*", "components/jira_service_api_client/*"]
-omit = ["*/tests/*", "*/__main__.py", "tests/integration/*", "tests/e2e/*", "components/jira_service_api_client/*"]
 
 [tool.coverage.report]
 fail_under = 85 # Justification: A high threshold ensures most code is tested.
@@ -149,7 +138,6 @@ exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
-    "if interactive:", 
     "if interactive:", 
     # Ignore abstract methods decorators
     "@abstractmethod",
@@ -162,6 +150,4 @@ exclude_lines = [
 ]
 
 [tool.fastapi]
-entrypoint = "jira_service.main:app"
-
 entrypoint = "jira_service.main:app"
