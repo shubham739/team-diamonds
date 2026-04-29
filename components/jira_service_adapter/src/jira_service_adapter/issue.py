@@ -66,5 +66,3 @@ class ServiceIssue(Issue):  # type: ignore[misc]
         The current service payload does not expose board identity.
         """
         raise NotImplementedError
-        v = self._data.get("due_date")
-        return str(v) if v is not None else None

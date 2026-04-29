@@ -5,6 +5,11 @@ from __future__ import annotations
 import os
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
+<<<<<<< HEAD
+=======
+
+from api.issue import Status
+>>>>>>> 5ace3d52c33729c8572d1ebbdf4d10793fa1296e
 
 from api.issue import Status
 from jira_service_adapter.issue import ServiceIssue
@@ -54,11 +59,15 @@ class JiraServiceAdapter:
     calling the Jira API directly.
 
     Args:
-        http_client: A configured JiraServiceClient pointing at the running service.
+        http_client: A configured AuthenticatedClient pointing at the running service.
 
     """
 
+<<<<<<< HEAD
     def __init__(self, http_client: JiraServiceClient) -> None:
+=======
+    def __init__(self, http_client: AuthenticatedClient) -> None:
+>>>>>>> 5ace3d52c33729c8572d1ebbdf4d10793fa1296e
         """Initialise with an authenticated HTTP client for the Jira service."""
         self._client = http_client
 
@@ -79,10 +88,15 @@ class JiraServiceAdapter:
             IssueNotFoundError: If the service returns 404.
 
         """
-        try:
-            data = self._client.get_issue(issue_id)
-        except ServiceIssueNotFoundError as exc:
-            raise IssueNotFoundError(str(exc)) from exc
+        resp = get_issue_issues_issue_id_get.sync_detailed(issue_id, client=self._client)
+        if resp.status_code == HTTPStatus.NOT_FOUND:
+            msg = f"Issue {issue_id} not found"
+            raise IssueNotFoundError(msg)
+        if resp.status_code != HTTPStatus.OK:
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
+        assert resp.parsed is not None
+        data: dict[str, Any] = resp.parsed.additional_properties
         return ServiceIssue(data)
 
     def get_issues(
@@ -119,7 +133,12 @@ class JiraServiceAdapter:
             due_date=due_date,
             max_results=max_results,
         )
-        yield from (ServiceIssue(item) for item in items)
+        if resp.status_code != HTTPStatus.OK:
+            msg = f"Service error {resp.status_code}"
+            raise ServiceClientError(msg)
+        assert resp.parsed is not None
+        issues: list[dict[str, Any]] = resp.parsed.additional_properties.get("issues", [])
+        yield from (ServiceIssue(item) for item in issues)
 
     def create_issue(
         self,
@@ -274,5 +293,5 @@ def get_client(*, interactive: bool = False) -> JiraServiceAdapter:  # noqa: ARG
         msg = f"Missing required environment variables: {', '.join(missing)}"
         raise OSError(msg)
 
-    http_client = JiraServiceClient(base_url=base_url, access_token=access_token)
+    http_client = AuthenticatedClient(base_url=base_url, token=access_token)
     return JiraServiceAdapter(http_client)

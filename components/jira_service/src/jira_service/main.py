@@ -88,6 +88,7 @@ class UpdateIssueRequest(BaseModel):
     due_date: str | None = None
     board_id: str | None = None
 
+
 class ChatRequest(BaseModel):
     """Request body for the AI chat endpoint."""
 
