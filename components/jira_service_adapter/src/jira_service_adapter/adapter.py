@@ -5,13 +5,9 @@ from __future__ import annotations
 import os
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
-<<<<<<< HEAD
-=======
 
 from api.issue import Status
->>>>>>> 5ace3d52c33729c8572d1ebbdf4d10793fa1296e
 
-from api.issue import Status
 from jira_service_adapter.issue import ServiceIssue
 from jira_service_api_client.api.default import (
     create_issue_issues_post,
@@ -63,11 +59,7 @@ class JiraServiceAdapter:
 
     """
 
-<<<<<<< HEAD
-    def __init__(self, http_client: JiraServiceClient) -> None:
-=======
     def __init__(self, http_client: AuthenticatedClient) -> None:
->>>>>>> 5ace3d52c33729c8572d1ebbdf4d10793fa1296e
         """Initialise with an authenticated HTTP client for the Jira service."""
         self._client = http_client
 
