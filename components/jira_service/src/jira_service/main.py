@@ -1,5 +1,6 @@
 """FastAPI server with Jira OAuth2 authentication and work management endpoints."""
 
+import json
 import logging
 import os
 import secrets
@@ -13,6 +14,7 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from pydantic import BaseModel
 
 from jira_client_impl import get_client, get_oauth_client
+from jira_client_impl.jira_impl import IssueNotFoundError as BaseIssueNotFoundError
 from jira_service.auth import (
     AuthenticationError,
     exchange_code_for_token,
@@ -23,9 +25,10 @@ from jira_service.auth import (
     user_sessions,
 )
 from jira_service.exceptions import ClientInitializationError
-from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
-from work_mgmt_client_interface.client import IssueTrackerClient
-from work_mgmt_client_interface.issue import IssueUpdate, Status
+from jira_service.ai_client_api import JIRA_TOOLS, OpenRouterClient, OpenRouterError, get_openrouter_client
+from api.issue import Status
+
+IssueTrackerClient = Any
 
 # Loading .env from inside .venv for local development
 env_path = Path(__file__).parent / ".env"
@@ -68,20 +71,28 @@ class CreateIssueRequest(BaseModel):
     """Request body for creating a new issue."""
 
     title: str | None = None
-    description: str | None = None
+    desc: str | None = None
     status: Status | None = None
-    assignee: str | None = None
+    members: list[str] | None = None
     due_date: str | None = None
+    board_id: str | None = None
 
 
 class UpdateIssueRequest(BaseModel):
     """Request body for updating an existing issue."""
 
     title: str | None = None
-    description: str | None = None
+    desc: str | None = None
     status: Status | None = None
-    assignee: str | None = None
+    members: list[str] | None = None
     due_date: str | None = None
+    board_id: str | None = None
+
+
+class ChatRequest(BaseModel):
+    """Request body for the AI chat endpoint."""
+
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -231,9 +242,9 @@ def _issue_to_dict(issue: Any) -> dict[str, Any]:  # noqa: ANN401
     return {
         "id": issue.id,
         "title": issue.title,
-        "description": issue.description,
+        "desc": issue.desc,
         "status": str(issue.status),
-        "assignee": issue.assignee,
+        "members": issue.members,
         "due_date": issue.due_date,
     }
 
@@ -301,9 +312,9 @@ def get_issue(
 def list_issues(
     client: Annotated[IssueTrackerClient, Depends(get_jira_client)],
     title: Annotated[str | None, Query()] = None,
-    description: Annotated[str | None, Query()] = None,
+    desc: Annotated[str | None, Query()] = None,
     status: Annotated[Status | None, Query()] = None,
-    assignee: Annotated[str | None, Query()] = None,
+    members: Annotated[list[str] | None, Query()] = None,
     due_date: Annotated[str | None, Query()] = None,
     max_results: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict[str, Any]:
@@ -312,9 +323,9 @@ def list_issues(
     Args:
         client: Jira client instance (injected).
         title: Filter by title substring.
-        description: Filter by description substring.
+        desc: Filter by description substring.
         status: Filter by status.
-        assignee: Filter by assignee email.
+        members: Filter by member email.
         due_date: Filter by due date (YYYY-MM-DD).
         max_results: Maximum number of results to return (1–100).
 
@@ -331,9 +342,9 @@ def list_issues(
             _issue_to_dict(issue)
             for issue in client.get_issues(
                 title=title,
-                description=description,
+                desc=desc,
                 status=status,
-                assignee=assignee,
+                members=members,
                 due_date=due_date,
                 max_results=max_results,
             )
@@ -356,7 +367,7 @@ def create_issue(
     The request body (JSON) maps to the fields of a new Jira issue.
 
     Args:
-        body: Issue fields (title, description, status, assignee, due_date).
+        body: Issue fields (title, desc, status, members, due_date, board_id).
         client: Jira client instance (injected).
 
     Returns:
@@ -370,10 +381,11 @@ def create_issue(
     try:
         issue = client.create_issue(
             title=body.title,
-            description=body.description,
+            desc=body.desc,
             status=body.status,
-            assignee=body.assignee,
+            members=body.members,
             due_date=body.due_date,
+            board_id=body.board_id,
         )
         logger.info("Created issue %s", issue.id)
         return _issue_to_dict(issue)
@@ -393,7 +405,7 @@ def update_issue(
     """Update an existing issue.
 
     Only the fields present in the JSON body are updated; omitted fields are
-    left unchanged (partial update semantics via IssueUpdate).
+    left unchanged.
 
     Args:
         issue_id: Jira issue key.
@@ -410,14 +422,15 @@ def update_issue(
 
     """
     try:
-        update = IssueUpdate(
+        issue = client.update_issue(
+            issue_id,
             title=body.title,
-            description=body.description,
+            desc=body.desc,
             status=body.status,
-            assignee=body.assignee,
+            members=body.members,
             due_date=body.due_date,
+            board_id=body.board_id,
         )
-        issue = client.update_issue(issue_id, update)
         logger.info("Updated issue %s", issue_id)
         return _issue_to_dict(issue)
     except BaseIssueNotFoundError as e:
@@ -457,3 +470,137 @@ def delete_issue(
         raise HTTPException(status_code=500, detail="Unexpected error while deleting the issue") from e
     logger.info("Deleted issue %s", issue_id)
     return {"status": "deleted", "issue_id": issue_id}
+
+
+# ---------------------------------------------------------------------------
+# Chat Endpoint (AI value-add — all /issues endpoints remain fully accessible)
+# ---------------------------------------------------------------------------
+
+_CHAT_SYSTEM_PROMPT = (
+    "You are a helpful Jira assistant. Use the provided tools to help users manage their Jira issues. "
+    "Summarize information clearly and confirm any actions you take."
+)
+
+
+def _execute_tool(name: str, args: dict[str, Any], client: IssueTrackerClient) -> Any:  # noqa: ANN401
+    """Dispatch a single LLM tool call to the Jira client and return a JSON-serialisable result."""
+    if name == "list_issues":
+        status_val: str | None = args.get("status")
+        issues = list(
+            client.get_issues(
+                title=args.get("title"),
+                desc=args.get("desc"),
+                status=Status(status_val) if status_val else None,
+                members=args.get("members"),
+                due_date=args.get("due_date"),
+                max_results=int(args.get("max_results", 20)),
+            )
+        )
+        return [_issue_to_dict(i) for i in issues]
+
+    if name == "get_issue":
+        return _issue_to_dict(client.get_issue(args["issue_id"]))
+
+    if name == "create_issue":
+        status_val = args.get("status")
+        issue = client.create_issue(
+            title=args.get("title"),
+            desc=args.get("desc"),
+            status=Status(status_val) if status_val else None,
+            members=args.get("members"),
+            due_date=args.get("due_date"),
+            board_id=args.get("board_id"),
+        )
+        return _issue_to_dict(issue)
+
+    if name == "update_issue":
+        status_val = args.get("status")
+        return _issue_to_dict(client.update_issue(
+            args["issue_id"],
+            title=args.get("title"),
+            desc=args.get("desc"),
+            status=Status(status_val) if status_val else None,
+            members=args.get("members"),
+            due_date=args.get("due_date"),
+            board_id=args.get("board_id"),
+        ))
+
+    if name == "delete_issue":
+        client.delete_issue(args["issue_id"])
+        return {"status": "deleted", "issue_id": args["issue_id"]}
+
+    raise ValueError(f"Unknown tool: {name!r}")
+
+
+def _run_chat_loop(
+    user_message: str,
+    jira_client: IssueTrackerClient,
+    openrouter: OpenRouterClient,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Run the agentic tool-use loop and return (reply_text, actions_taken)."""
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": _CHAT_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+    actions: list[dict[str, Any]] = []
+
+    for _ in range(3):
+        response = openrouter.complete(messages, tools=JIRA_TOOLS)
+        choice = response["choices"][0]
+        assistant_message: dict[str, Any] = choice["message"]
+        messages.append(assistant_message)
+
+        if choice.get("finish_reason") != "tool_calls" or not assistant_message.get("tool_calls"):
+            return assistant_message.get("content") or "Done.", actions
+
+        for tool_call in assistant_message["tool_calls"]:
+            tool_name: str = tool_call["function"]["name"]
+            tool_args: dict[str, Any] = json.loads(tool_call["function"]["arguments"])
+            try:
+                result = _execute_tool(tool_name, tool_args, jira_client)
+            except Exception as exc:
+                result = {"error": str(exc)}
+            actions.append({"tool": tool_name, "args": tool_args, "result": result})
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "content": json.dumps(result),
+            })
+
+    return "I was unable to complete the request within the allowed steps.", actions
+
+
+@app.post("/chat")
+def chat(
+    body: ChatRequest,
+    client: Annotated[IssueTrackerClient, Depends(get_jira_client)],
+    openrouter: Annotated[OpenRouterClient, Depends(get_openrouter_client)],
+) -> dict[str, Any]:
+    """Natural-language Jira assistant powered by OpenRouter.
+
+    The LLM interprets the user's message and calls Jira tools as needed.
+    All existing /issues endpoints remain fully accessible alongside this endpoint.
+
+    Args:
+        body: Chat request containing a ``message`` field.
+        client: Jira client (injected).
+        openrouter: OpenRouter LLM client (injected).
+
+    Returns:
+        ``{"reply": str, "actions": list}`` — the assistant's response and
+        the list of Jira tool calls that were executed.
+
+    Raises:
+        HTTPException 502: If OpenRouter returns an error.
+        HTTPException 500: On unexpected errors.
+
+    """
+    try:
+        reply, actions = _run_chat_loop(body.message, client, openrouter)
+        return {"reply": reply, "actions": actions}
+    except OpenRouterError as e:
+        logger.error("OpenRouter error: %s", e)
+        raise HTTPException(status_code=502, detail=f"OpenRouter error: {e}") from e
+    except Exception as e:
+        logger.exception("Unexpected error in /chat")
+        raise HTTPException(status_code=500, detail="Unexpected error in chat") from e

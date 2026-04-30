@@ -3,8 +3,8 @@
 ## Overview
 
 `jira-service-adapter` is the **Adapter Pattern** component introduced in HW2.
-It implements the `IssueTrackerClient` abstract interface from
-`work-mgmt-client-interface` by delegating every call through
+It implements the client contract from
+the external `api` package by delegating every call through
 `JiraServiceClient` to the deployed `jira-service` over HTTP.
 
 This achieves **location transparency**: consumer code that works with
@@ -15,7 +15,7 @@ This achieves **location transparency**: consumer code that works with
 
 ```
 Consumer (e.g. main.py)
-  │  calls IssueTrackerClient methods
+  │  calls api client contract methods
   ▼
 JiraServiceAdapter          ← this package
   │  delegates via HTTP client
@@ -41,8 +41,8 @@ issues = list(client.get_issues(status="in_progress"))
 # Sanity check: interchangeable with the local library
 from jira_client_impl import get_client as get_local_client
 
-local_client  = get_local_client()   # IssueTrackerClient via Jira API directly
-remote_client = get_client()         # IssueTrackerClient via HTTP service
+local_client  = get_local_client()   # api client contract via Jira API directly
+remote_client = get_client()         # same api contract via HTTP service
 
 # Both produce identical results — same interface contract
 ```
@@ -69,7 +69,7 @@ exceptions that consumers expect:
 
 | Source exception | Translated to |
 |-----------------|---------------|
-| `ServiceIssueNotFoundError` | `IssueNotFoundError` (from `work-mgmt-client-interface`) |
+| `ServiceIssueNotFoundError` | `IssueNotFoundError` (api-compatible adapter exception) |
 | `ServiceClientError` | Re-raised as-is |
 
 ## Tests

@@ -5,9 +5,17 @@ Authentication
 The client supports two credential modes:
 
 1. API Token (Basic Auth) — get_client(interactive=False) or get_client(interactive=True)
+1. API Token (Basic Auth) — get_client(interactive=False) or get_client(interactive=True)
         JIRA_BASE_URL   https://myorg.atlassian.net
         JIRA_USER_EMAIL me@example.com
         JIRA_API_TOKEN  <token from https://id.atlassian.com/manage-profile/security/api-tokens>
+
+2. OAuth2 Bearer Token — get_oauth_client(access_token)
+        JIRA_CLOUD_ID   <cloud ID from https://api.atlassian.com/oauth/token/accessible-resources>
+        access_token    Atlassian OAuth2 access token (passed at call-time, NOT read from env)
+
+   When using OAuth2, the Atlassian REST API base URL changes to:
+        https://api.atlassian.com/ex/jira/{cloud_id}
 
 2. OAuth2 Bearer Token — get_oauth_client(access_token)
         JIRA_CLOUD_ID   <cloud ID from https://api.atlassian.com/oauth/token/accessible-resources>
@@ -22,30 +30,27 @@ Dependencies:
 """
 
 # to avoid having to consider forward declarations, the below line must be first line in the file
+
+# to avoid having to consider forward declarations, the below line must be first line in the file
 from __future__ import annotations
 
 import os
 import re
 from getpass import getpass
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Never, TypeAlias, cast
 
 import requests
+from api.issue import Status
 from requests.auth import HTTPBasicAuth
 
 from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_issue import JiraIssue
 from jira_client_impl.jira_issue import get_issue as _make_issue
-from jira_client_impl.jira_list import JiraList
-from work_mgmt_client_interface.client import IssueNotFoundError as BaseIssueNotFoundError
-from work_mgmt_client_interface.client import IssueTrackerClient
-from work_mgmt_client_interface.issue import IssueUpdate, Status
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from work_mgmt_client_interface.board import Board
-    from work_mgmt_client_interface.list import List
 
 # A precise definition of what JSON can actually contain!
 JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None  # noqa: UP040
@@ -55,18 +60,19 @@ JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | flo
 # ---------------------------------------------------------------------------
 
 _STATUS_TO_JQL: dict[Status, str] = {
-    Status.TODO: '"To Do"',
+    Status.TO_DO: '"To Do"',
     Status.IN_PROGRESS: '"In Progress"',
-    Status.COMPLETE: '"Complete"',
-    Status.CANCELLED: '"Cancelled"',
+    Status.COMPLETED: '"Complete"',
 }
 
 JIRA_SPECIAL_CHARS = r'(["\'*?=~><!\+\-:&|()\[\]{}\\^])'
 
 # Jira requires a transition to be selected to change status
 # the below is a mapping of common statuses and a mapping to a recognized transition in Jira
+# Jira requires a transition to be selected to change status
+# the below is a mapping of common statuses and a mapping to a recognized transition in Jira
 _STATUS_TO_JIRA_TRANSITION: dict[Status, list[str]] = {
-    Status.TODO: [
+    Status.TO_DO: [
         "to do",
         "reopen issue",
         "reopen",
@@ -80,21 +86,13 @@ _STATUS_TO_JIRA_TRANSITION: dict[Status, list[str]] = {
         "start development",
         "in work",
     ],
-    Status.COMPLETE: [
+    Status.COMPLETED: [
         "done",
         "resolve issue",
         "close issue",
         "resolved",
         "complete",
         "closed",
-    ],
-    Status.CANCELLED: [
-        "cancelled",
-        "canceled",
-        "won't do",
-        "wont do",
-        "rejected",
-        "invalid",
     ],
 }
 
@@ -103,8 +101,13 @@ class JiraError(Exception):
     """Raise when the Jira API returns an unexpected response."""
 
 
+class BaseIssueNotFoundError(Exception):
+    """Base exception raised when a Jira issue cannot be found."""
+
+
 class IssueNotFoundError(BaseIssueNotFoundError):
     """Raise when a requested Jira issue does not exist."""
+
 
 
 def sanitize_input(value: str) -> str:
@@ -112,12 +115,19 @@ def sanitize_input(value: str) -> str:
     return re.sub(JIRA_SPECIAL_CHARS, r"\\\1", value)
 
 
+def _primary_member(members: list[str] | None) -> str | None:
+    """Return the primary member used for Jira's single-assignee model."""
+    if not members:
+        return None
+    return members[0]
+
+
 # ---------------------------------------------------------------------------
 # Client implementation
 # ---------------------------------------------------------------------------
 
 
-class JiraClient(IssueTrackerClient):
+class JiraClient:
     """Concrete implementation of the Client abstraction using Jira API.
 
     Args:
@@ -147,6 +157,20 @@ class JiraClient(IssueTrackerClient):
         """
         self._base_url = base_url.rstrip("/")
         self._session = requests.Session()
+        if access_token:
+            # OAuth2 bearer token mode — used by the FastAPI service per-user path
+            self._session.headers.update(
+                {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+        else:
+            # API token / Basic Auth mode — used by the local library path
+            self._auth = HTTPBasicAuth(user_email, api_token)
+            self._session.auth = self._auth
+            self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
         if access_token:
             # OAuth2 bearer token mode — used by the FastAPI service per-user path
             self._session.headers.update(
@@ -230,9 +254,9 @@ class JiraClient(IssueTrackerClient):
     def _build_jql_query(
         self,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
     ) -> str:
         """Construct a JQL query string based on provided filters."""
@@ -242,8 +266,8 @@ class JiraClient(IssueTrackerClient):
             clean_title = sanitize_input(title)
             # summary is Jira's term for "title"
             clauses.append(f"summary ~ '{clean_title}'")
-        if description:
-            clean_description = sanitize_input(description)
+        if desc:
+            clean_description = sanitize_input(desc)
             clauses.append(f"description ~ '{clean_description}'")
         if status:
             # value comes from an internal hardcoded map, not user input, so no sanitization needed
@@ -251,8 +275,9 @@ class JiraClient(IssueTrackerClient):
         if due_date:
             clean_due_date = sanitize_input(due_date)
             clauses.append(f"due = '{clean_due_date}'")
-        if assignee:
-            clean_assignee = sanitize_input(assignee)
+        primary_member = _primary_member(members)
+        if primary_member:
+            clean_assignee = sanitize_input(primary_member)
             clauses.append(f"assignee = '{clean_assignee}'")
 
         # build JQL query
@@ -269,6 +294,7 @@ class JiraClient(IssueTrackerClient):
     def get_issue(self, issue_id: str) -> JiraIssue:
         """Fetch a single Jira issue by id."""
         # _get returns a json string, build_issue builds the Issue instance
+        # _get returns a json string, build_issue builds the Issue instance
         data = self._get(f"/issue/{issue_id}")
 
         if not isinstance(data, dict):
@@ -280,9 +306,9 @@ class JiraClient(IssueTrackerClient):
         self,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
         max_results: int = 20,
     ) -> Iterator[JiraIssue]:
@@ -293,9 +319,9 @@ class JiraClient(IssueTrackerClient):
         # 1. Delegate the complex JQL string building to our new helper method
         jql = self._build_jql_query(
             title=title,
-            description=description,
+            desc=desc,
             status=status,
-            assignee=assignee,
+            members=members,
             due_date=due_date,
         )
 
@@ -340,26 +366,31 @@ class JiraClient(IssueTrackerClient):
         self,
         *,
         title: str | None = None,
-        description: str | None = None,
+        desc: str | None = None,
         status: Status | None = None,
-        assignee: str | None = None,
+        members: list[str] | None = None,
         due_date: str | None = None,
+        board_id: str | None = None,
     ) -> JiraIssue:
         # A board is a required field in Jira, and likely all other issue tracker implementations
         """Create a new Jira issue and return it as a JiraIssue."""
-        # required fields -- title and issue type
+        # Use board_id as project key if provided, otherwise use OPS as default
+        project_key = board_id or "OPS"
+
+        # required fields -- title, issue type, and project
         fields: dict[str, Any] = {
+            "project": {"key": project_key},
             "summary": title,
-            "issuetype": {"name": "Issue"},
+            "issuetype": {"name": "Task"},
         }
-        if description:
+        if desc:
             # Jira Cloud expects Atlassian Document Format for description
-            fields["description"] = _text_to_adf(description)
-        if assignee:
-            fields["assignee"] = {"emailAddress": assignee}
+            fields["description"] = _text_to_adf(desc)
+        primary_member = _primary_member(members)
+        if primary_member:
+            fields["assignee"] = {"emailAddress": primary_member}
         if due_date:
             fields["duedate"] = due_date
-
         data = self._post("/issue", {"fields": fields})
 
         if not isinstance(data, dict):
@@ -376,16 +407,31 @@ class JiraClient(IssueTrackerClient):
 
         return self.get_issue(issue_key)
 
-    def update_issue(self, issue_id: str, update: IssueUpdate) -> JiraIssue:
+    def update_issue(
+        self,
+        issue_id: str,
+        *,
+        title: str | None = None,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status | None = None,
+        board_id: str | None = None,  # noqa: ARG002
+    ) -> JiraIssue:
         """Update issue.
 
         Args:
             issue_id: The Jira issue id
-            update:  An "IssueUpdate" dataclass instance with the desired changes
+            title: Updated title.
+            desc: Updated description.
+            members: Updated members list.
+            due_date: Updated due date.
+            status: Updated status.
+            board_id: Updated board identifier.
 
         Notes on usage:
-            Applies an IssueUpdate to an existing Jira issue and return the updated issue
-            Fields left as "None" are not sent to the API and remain unchanged
+            Applies a partial update to an existing Jira issue and return the updated issue.
+            Fields left as "None" are not sent to the API and remain unchanged.
             Status changes are handled via the Jira Transitions API because Jira does not allow direct status field edits
 
         Returns:
@@ -396,24 +442,22 @@ class JiraClient(IssueTrackerClient):
             JiraError: If a requested status transition is unavailable.
 
         """
-        changed = update.set_fields()
-
         fields: dict[str, Any] = {}
-        if "title" in changed:
-            fields["summary"] = changed["title"]
-        if "description" in changed:
-            fields["description"] = _text_to_adf(changed["description"])
-        if "assignee" in changed:
-            fields["assignee"] = {"emailAddress": changed["assignee"]}
-        if "due_date" in changed:
-            fields["duedate"] = changed["due_date"]
-
+        if title is not None:
+            fields["summary"] = title
+        if desc is not None:
+            fields["description"] = _text_to_adf(desc)
+        if members is not None:
+            primary_member = _primary_member(members)
+            fields["assignee"] = {"emailAddress": primary_member} if primary_member else None
+        if due_date is not None:
+            fields["duedate"] = due_date
         if fields:
             self._put(f"/issue/{issue_id}", {"fields": fields})
 
         # status changes must occur after the _put call
-        if "status" in changed:
-            self._apply_status_transition(issue_id, changed["status"])
+        if status is not None:
+            self._apply_status_transition(issue_id, status)
 
         return self.get_issue(issue_id)
 
@@ -430,7 +474,7 @@ class JiraClient(IssueTrackerClient):
     # Board access (Jira Agile API)
     # ------------------------------------------------------------------
 
-    def get_board(self, board_id: str) -> Board:
+    def get_board(self, board_id: str) -> JiraBoard:
         """Return a single Jira board by id.
 
         Args:
@@ -453,7 +497,7 @@ class JiraClient(IssueTrackerClient):
             _client=self,
         )
 
-    def get_boards(self) -> Iterator[Board]:
+    def get_boards(self) -> Iterator[JiraBoard]:
         """Return an iterator over all Jira agile boards visible to the current credentials.
 
         Yields:
@@ -485,74 +529,13 @@ class JiraClient(IssueTrackerClient):
     # List access (board columns exposed as List objects)
     # ------------------------------------------------------------------
 
-    def get_list(self, list_id: str) -> List:
-        """Return a single list (board column) by composite id.
+    def get_list(self, list_id: str) -> Never:
+        """List access is not currently supported in this checkout."""
+        raise NotImplementedError
 
-        The ``list_id`` must follow the format ``"{board_id}:{status_value}"``
-        (e.g. ``"123:todo"``), which encodes both the parent board and the
-        column's normalized status.
-
-        Args:
-            list_id: Composite identifier in the form ``"{board_id}:{status}"``.
-
-        Returns:
-            A JiraList instance representing that column.
-
-        Raises:
-            ValueError: If ``list_id`` is malformed or the status is unknown.
-
-        """
-        parts = list_id.split(":", 1)
-        if len(parts) != 2:  # noqa: PLR2004
-            msg = f"Invalid list_id {list_id!r}. Expected format: '{{board_id}}:{{status}}'"
-            raise ValueError(msg)
-        board_id, status_value = parts
-        try:
-            status = Status(status_value)
-        except ValueError:
-            msg = f"Unknown status value {status_value!r} in list_id {list_id!r}"
-            raise ValueError(msg) from None
-        board = self.get_board(board_id)
-        if not isinstance(board, JiraBoard):
-            msg = "get_board returned unexpected type"
-            raise TypeError(msg)
-        for column in board.columns:
-            if column.status == status:
-                return JiraList(
-                    _list_id=list_id,
-                    _board_id=board_id,
-                    _name=column.name,
-                    _status=status,
-                    _client=self,
-                )
-        msg = f"Status {status_value!r} not found in board {board_id}"
-        raise ValueError(msg)
-
-    def get_lists(self, board_id: str) -> Iterator[List]:
-        """Return the columns of a Jira board as List objects.
-
-        Each column (To Do, In Progress, Done, Cancelled) is yielded as a
-        JiraList whose ``id`` is ``"{board_id}:{status_value}"``.
-
-        Args:
-            board_id: The Jira agile board ID.
-
-        Yields:
-            JiraList instances, one per board column.
-
-        """
-        board = self.get_board(board_id)
-        if not isinstance(board, JiraBoard):
-            msg = "get_board returned unexpected type"
-            raise TypeError(msg)
-        for column in board.columns:
-            yield JiraList(
-                _list_id=f"{board_id}:{column.status.value}",
-                _board_id=board_id,
-                _name=column.name,
-                _status=column.status,
-                _client=self,
-            )
+    def get_lists(self, board_id: str) -> Iterator[Any]:
+        """List access is not currently supported in this checkout."""
+        raise NotImplementedError
 
     # ------------------------------------------------------------------
     # Status transition helper
@@ -565,8 +548,10 @@ class JiraClient(IssueTrackerClient):
         said transition by its ID.
         """
         # since our status value have an undercore, this changes the underscores to spaces, and lowers text
+        # since our status value have an undercore, this changes the underscores to spaces, and lowers text
         target.value.replace("_", " ").lower()
 
+        # calls the Jira API to get a list of transitions available for this issue
         # calls the Jira API to get a list of transitions available for this issue
         data = self._get(f"/issue/{issue_id}/transitions")
 
@@ -577,6 +562,7 @@ class JiraClient(IssueTrackerClient):
         raw_transitions = data.get("transitions", [])
 
         if not isinstance(raw_transitions, list):
+            raw_transitions = []
             raw_transitions = []
 
         transitions: list[dict[str, Any]] = [t for t in raw_transitions if isinstance(t, dict)]
@@ -591,7 +577,9 @@ class JiraClient(IssueTrackerClient):
                 match = available[candidate.lower()]
                 break
         # raises Jira error if there are no available transitions
+        # raises Jira error if there are no available transitions
         if match is None:
+            msg = f"No transition to '{target.value}' found for {issue_id}. Available transitions: {list(available.keys())}"
             msg = f"No transition to '{target.value}' found for {issue_id}. Available transitions: {list(available.keys())}"
             raise JiraError(msg)
 
@@ -601,6 +589,7 @@ class JiraClient(IssueTrackerClient):
 # ---------------------------------------------------------------------------
 # ADF builder -  Jira requires description data to be in this format
 # ---------------------------------------------------------------------------
+
 
 
 def _text_to_adf(text: str) -> dict[str, Any]:
@@ -628,6 +617,7 @@ def _text_to_adf(text: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Get client
 # ---------------------------------------------------------------------------
+
 
 
 def get_client(*, interactive: bool = False) -> JiraClient:
@@ -664,7 +654,18 @@ def get_client(*, interactive: bool = False) -> JiraClient:
             ]
             if not val
         ]
+        # collects the missing fields and raises an error alerting to the missing values
+        missing = [
+            name
+            for name, val in [
+                ("JIRA_BASE_URL", base_url),
+                ("JIRA_USER_EMAIL", user_email),
+                ("JIRA_API_TOKEN", api_token),
+            ]
+            if not val
+        ]
         if missing:
+            msg = f"Missing required environment variables: {', '.join(missing)}. Set them or call get_client(interactive=True)."
             msg = f"Missing required environment variables: {', '.join(missing)}. Set them or call get_client(interactive=True)."
             raise OSError(msg)
 
