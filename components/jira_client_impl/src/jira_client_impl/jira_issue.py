@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from api.issue import Issue, Status
+from api.issue import Issue, Status
 
 if TYPE_CHECKING:
     from jira_client_impl.jira_impl import JiraClient
@@ -16,6 +17,10 @@ if TYPE_CHECKING:
 # to clean user's input into a standardized status that is used across all implementations
 _JIRA_STATUS_MAP: dict[str, Status] = {
     # to do
+    "to do": Status.TO_DO,
+    "open": Status.TO_DO,
+    "backlog": Status.TO_DO,
+    "new": Status.TO_DO,
     "to do": Status.TO_DO,
     "open": Status.TO_DO,
     "backlog": Status.TO_DO,
@@ -32,8 +37,14 @@ _JIRA_STATUS_MAP: dict[str, Status] = {
     "cancelled": Status.COMPLETED,
     "canceled": Status.COMPLETED,
     "rejected": Status.COMPLETED,
+    "complete": Status.COMPLETED,
+    "done": Status.COMPLETED,
+    "closed": Status.COMPLETED,
+    "resolved": Status.COMPLETED,
+    "cancelled": Status.COMPLETED,
+    "canceled": Status.COMPLETED,
+    "rejected": Status.COMPLETED,
 }
-
 
 def _normalize_status(jira_status: str | None) -> Status:
     if not jira_status:
@@ -44,6 +55,7 @@ def _normalize_status(jira_status: str | None) -> Status:
 # ------------------------------------------------------------------
 # Issue implementation
 # ------------------------------------------------------------------
+class JiraIssue(Issue):  # type: ignore[misc]
 class JiraIssue(Issue):  # type: ignore[misc]
     """Concrete Issue backed by a Jira issue API response.
 
@@ -88,6 +100,7 @@ class JiraIssue(Issue):  # type: ignore[misc]
 
     @property
     def desc(self) -> str:
+    def desc(self) -> str:
         """Extract description from ADF format."""
         # Jira Cloud returns description as Atlassian Document Format (ADF).
         # So description must be extracted from adf format
@@ -105,6 +118,11 @@ class JiraIssue(Issue):  # type: ignore[misc]
         return self.desc
 
     @property
+    def description(self) -> str:
+        """Backward-compatible alias for desc."""
+        return self.desc
+
+    @property
     def status(self) -> Status:
         """Return status."""
         status_name: str = self._raw.get("status", {}).get("name", "") if isinstance(self._raw.get("status"), dict) else ""
@@ -113,10 +131,28 @@ class JiraIssue(Issue):  # type: ignore[misc]
     @property
     def members(self) -> list[str] | None:
         """Return the assigned members."""
+    def members(self) -> list[str] | None:
+        """Return the assigned members."""
         assignee = self._raw.get("assignee")
         if not assignee:
             return None
         # Prefer email, fall back to displayName
+        primary = assignee.get("emailAddress") or assignee.get("displayName") or None
+        return [primary] if primary else None
+
+    @property
+    def assignee(self) -> str | None:
+        """Backward-compatible alias for the primary member."""
+        members = self.members
+        return members[0] if members else None
+
+    @property
+    def board_id(self) -> str:
+        """Return the associated board identifier when available."""
+        project = self._raw.get("project")
+        if isinstance(project, dict):
+            return str(project.get("id") or project.get("key") or "")
+        return ""
         primary = assignee.get("emailAddress") or assignee.get("displayName") or None
         return [primary] if primary else None
 
@@ -149,6 +185,16 @@ class JiraIssue(Issue):  # type: ignore[misc]
         status: Status | None = None,
         board_id: str | None = None,
     ) -> None:
+    def update(
+        self,
+        *,
+        title: str | None = None,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status | None = None,
+        board_id: str | None = None,
+    ) -> None:
         """Apply a partial update to this issue via the Jira API.
 
         Delegates to ``JiraClient.update_issue()``.  Requires that this
@@ -156,6 +202,12 @@ class JiraIssue(Issue):  # type: ignore[misc]
         automatically when issues are fetched via ``JiraClient``).
 
         Args:
+            title: Updated title.
+            desc: Updated description.
+            members: Updated members.
+            due_date: Updated due date.
+            status: Updated status.
+            board_id: Updated board identifier.
             title: Updated title.
             desc: Updated description.
             members: Updated members.
@@ -186,7 +238,6 @@ class JiraIssue(Issue):  # type: ignore[misc]
 # Extract data from ADF format which Jira stores description in
 # ---------------------------------------------------------------------------
 
-
 def _extract_adf_text(node: dict[str, Any]) -> str:
     """Recursively extract plain text from an ADF document node."""
     if not isinstance(node, dict):
@@ -196,11 +247,9 @@ def _extract_adf_text(node: dict[str, Any]) -> str:
     parts = [_extract_adf_text(child) for child in node.get("content") or []]
     return "\n".join(filter(None, parts))
 
-
 # ---------------------------------------------------------------------------
 # Get issue
 # ---------------------------------------------------------------------------
-
 
 def get_issue(
     issue_id: str,
