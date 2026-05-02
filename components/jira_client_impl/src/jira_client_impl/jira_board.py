@@ -18,13 +18,6 @@ class JiraColumn:
     status: Status
     name: str
 
-@dataclass(frozen=True)
-class JiraColumn:
-    """Lightweight board column descriptor used by JiraBoard."""
-
-    status: Status
-    name: str
-
 
 @dataclass
 class JiraBoard(Board):  # type: ignore[misc]
