@@ -24,9 +24,9 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+from api.issue import Issue
 
 from jira_client_impl.jira_impl import IssueNotFoundError, JiraClient, get_client
-from work_mgmt_client_interface.issue import Issue
 
 pytestmark = pytest.mark.e2e
 
@@ -52,7 +52,7 @@ def created_issue(client: JiraClient) -> Generator[Issue, None, None]:
     """Create a real Jira issue for a test and delete it afterwards."""
     issue = client.create_issue(
         title="[E2E Test] Temporary issue - safe to delete",
-        description="Created automatically by the E2E test suite.",
+        desc="Created automatically by the E2E test suite.",
     )
     yield issue
     with contextlib.suppress(IssueNotFoundError):
@@ -77,7 +77,7 @@ class TestMainScriptStructure:
         """main.py must have valid Python syntax."""
         if not MAIN_SCRIPT.exists():
             pytest.skip("main.py not found.")
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [sys.executable, "-m", "py_compile", str(MAIN_SCRIPT)],
             capture_output=True,
             text=True,
@@ -95,15 +95,14 @@ class TestMainScriptStructure:
         pythonpath = os.pathsep.join(
             [
                 str(root / "components" / "jira_client_impl" / "src"),
-                str(root / "components" / "work_mgmt_client_interface" / "src"),
             ],
         )
         env = {**os.environ, "PYTHONPATH": pythonpath}
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",
-                "import jira_client_impl; from jira_client_impl.jira_impl import get_client; print('ok')",
+                "import api; import jira_client_impl; from jira_client_impl.jira_impl import get_client; print('ok')",
             ],
             capture_output=True,
             text=True,
@@ -111,6 +110,7 @@ class TestMainScriptStructure:
             cwd=str(root),
             env=env,
             check=False,
+            shell=False,
         )
         assert result.returncode == 0, f"Import error:\n{result.stderr}"
         assert "ok" in result.stdout
@@ -135,10 +135,6 @@ class TestApplicationStructure:
             "components/jira_client_impl/src/jira_client_impl/jira_impl.py",
             "components/jira_client_impl/src/jira_client_impl/jira_issue.py",
             "components/jira_client_impl/src/jira_client_impl/jira_board.py",
-            "components/work_mgmt_client_interface/src/work_mgmt_client_interface/__init__.py",
-            "components/work_mgmt_client_interface/src/work_mgmt_client_interface/client.py",
-            "components/work_mgmt_client_interface/src/work_mgmt_client_interface/issue.py",
-            "components/work_mgmt_client_interface/src/work_mgmt_client_interface/board.py",
         ]
         missing = [p for p in required if not (root / p).exists()]
         assert not missing, f"Missing required project files: {missing}"

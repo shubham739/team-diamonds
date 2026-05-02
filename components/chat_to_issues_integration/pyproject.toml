@@ -3,13 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "jira-service-adapter"
+name = "chat-to-issues-integration"
 version = "0.1.0"
-description = "Adapter that implements IssueTrackerClient over the Jira FastAPI service"
+description = "Integration app wiring a chat vertical (Slack) with the issue tracker vertical (Jira)"
 requires-python = ">=3.12"
 dependencies = [
     "ospd-issue-tracker-api",
-    "jira-service-api-client",
+    "jira-service-adapter",
+    "slack-sdk>=3.27.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -19,11 +21,8 @@ test = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/jira_service_adapter"]
+packages = ["src/chat_to_issues_integration"]
 
 [tool.uv.sources]
 ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
-jira-service-api-client = {workspace = true}
-
-[tool.coverage.report]
-fail_under = 84
+jira-service-adapter = { workspace = true }
