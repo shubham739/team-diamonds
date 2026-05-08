@@ -8,7 +8,7 @@
 
 | NetID | Name | GitHub |
 |-------|------|--------|
-| — | Subhradeep Acharjee | — |
+| — | Subhradeep Acharjee | @Subhradeep246 |
 | — | Ethan Bell | @ethancharles13 |
 | — | Shubham Tanwar | @shubham739 |
 | — | Tanya Thomas | @tatyanacthomas |
