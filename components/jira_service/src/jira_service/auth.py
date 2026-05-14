@@ -4,14 +4,15 @@ import logging
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlencode
 
 import requests
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 
 JIRA_OAUTH_CLIENT_ID = os.getenv("JIRA_OAUTH_CLIENT_ID")
 JIRA_OAUTH_CLIENT_SECRET = os.getenv("JIRA_OAUTH_CLIENT_SECRET")
-JIRA_OAUTH_REDIRECT_URI = os.getenv("JIRA_OAUTH_REDIRECT_URI", "http://localhost:8000/auth/callback")
+JIRA_OAUTH_REDIRECT_URI = os.getenv("JIRA_OAUTH_REDIRECT_URI", "https://baii6ilfl2.execute-api.us-east-2.amazonaws.com/prod/auth/callback")
 
 # Jira OAuth Endpoints
 JIRA_AUTH_URL = "https://auth.atlassian.com/authorize"
@@ -20,6 +21,13 @@ JIRA_API_URL = "https://api.atlassian.com/me"
 
 # HTTP status code constant
 HTTP_OK = 200
+
+# Log OAuth configuration status at startup
+logger.info(
+    "OAuth Config: client_id=%s, redirect_uri=%s",
+    "SET" if JIRA_OAUTH_CLIENT_ID else "NOT SET",
+    JIRA_OAUTH_REDIRECT_URI,
+)
 
 
 class AuthenticationError(Exception):
@@ -44,16 +52,24 @@ def get_authorize_url(state: str) -> str:
         Authorization URL for OAuth flow
 
     """
+    logger.info("in auth.py.get_authorize_url:")
+    if not JIRA_OAUTH_CLIENT_ID:
+        msg = "JIRA_OAUTH_CLIENT_ID is not configured. Set the environment variable before requesting auth."
+        logger.error(msg)
+        raise AuthenticationError(msg)
+
     params = {
         "client_id": JIRA_OAUTH_CLIENT_ID,
         "redirect_uri": JIRA_OAUTH_REDIRECT_URI,
         "response_type": "code",
         "state": state,
         "scope": "read:me read:jira-work write:jira-work offline_access",
-        "prompt": "consent",
     }
-    query_string = "&".join([f"{k}={v}" for k, v in params.items()])
-    return f"{JIRA_AUTH_URL}?{query_string}"
+    query_string = urlencode(params)
+    auth_url = f"{JIRA_AUTH_URL}?{query_string}"
+    logger.info("Generated Jira OAuth URL with client_id=%s, redirect_uri=%s", JIRA_OAUTH_CLIENT_ID, JIRA_OAUTH_REDIRECT_URI)
+    logger.info("auth_url = %s", auth_url)
+    return auth_url
 
 
 def exchange_code_for_token(code: str) -> dict[str, Any]:
@@ -139,19 +155,111 @@ def get_user_info(access_token: str) -> dict[str, Any]:
         raise AuthenticationError(msg) from e
 
 
-def store_session(user_id: str, token_data: dict[str, Any]) -> None:
+def create_chat_session(base_url: str) -> tuple[str, str]:
+    """Create a new Team 9 chat session.
+
+    Args:
+        base_url: Base URL of Team 9's chat service.
+
+    Returns:
+        ``(session_id, login_url)`` tuple.
+
+    Raises:
+        AuthenticationError: If the request fails or the response is malformed.
+
+    """
+    logger.info("In auth.py/create_chat_session:")
+    try:
+        response = requests.post(f"{base_url}/auth/sessions", timeout=60)
+        response.raise_for_status()
+        data: dict[str, Any] = response.json()
+        return data["session_id"], data["login_url"]
+    except (requests.RequestException, KeyError) as e:
+        msg = "Failed to create Team 9 chat session"
+        raise AuthenticationError(msg) from e
+
+
+def get_accessible_resources(access_token: str) -> list[dict[str, Any]]:
+    """Fetch the list of Atlassian cloud sites accessible to this token.
+
+    Args:
+        access_token: A valid Atlassian OAuth2 access token.
+
+    Returns:
+        List of resource dicts, each containing at minimum an "id" (cloud ID).
+
+    Raises:
+        AuthenticationError: If the request fails.
+
+    """
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        response = requests.get(
+            "https://api.atlassian.com/oauth/token/accessible-resources",
+            headers=headers,
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()  # type: ignore[no-any-return]
+    except requests.RequestException as e:
+        msg = "Failed to fetch accessible Atlassian resources"
+        logger.exception(msg)
+        raise AuthenticationError(msg) from e
+
+
+def store_session(
+    user_id: str,
+    token_data: dict[str, Any],
+    cloud_id: str = "",
+    chat_session_id: str = "",
+    channel_id: str = "",
+) -> None:
     """Store user session with access and refresh tokens.
 
     Args:
         user_id: Unique user identifier
         token_data: Token response data
+        cloud_id: Atlassian cloud ID for this user's Jira instance
+        chat_session_id: Team 9 chat service session ID
+        channel_id: Selected Team 9 chat channel ID
 
     """
     user_sessions[user_id] = {
         "access_token": token_data.get("access_token"),
         "refresh_token": token_data.get("refresh_token"),
         "expires_at": datetime.now(UTC) + timedelta(seconds=token_data.get("expires_in", 3600)),
+        "cloud_id": cloud_id,
+        "chat_session_id": chat_session_id,
+        "channel_id": channel_id,
     }
+
+
+def update_session_channel(user_id: str, channel_id: str) -> None:
+    """Store the user's selected chat channel in their existing session.
+
+    Args:
+        user_id: Unique user identifier
+        channel_id: Team 9 chat channel ID chosen by the user
+
+    """
+    if user_id in user_sessions:
+        user_sessions[user_id]["channel_id"] = channel_id
+
+
+def get_session_by_token(access_token: str) -> tuple[str, dict[str, Any]] | None:
+    """Find a session by its access token.
+
+    Args:
+        access_token: Atlassian OAuth2 access token.
+
+    Returns:
+        ``(user_id, session)`` if found, otherwise ``None``.
+
+    """
+    for user_id, session in user_sessions.items():
+        if session.get("access_token") == access_token:
+            return user_id, session
+    return None
 
 
 def get_session(user_id: str) -> dict[str, Any] | None:

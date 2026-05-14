@@ -4,12 +4,12 @@ import logging
 import os
 
 import pytest
+from api.board import Board
+from api.issue import Issue, Status
 
 from jira_client_impl.jira_board import JiraBoard
 from jira_client_impl.jira_impl import JiraClient, get_client
 from jira_client_impl.jira_issue import JiraIssue, get_issue
-from work_mgmt_client_interface.board import Board
-from work_mgmt_client_interface.issue import Issue, Status
 
 pytestmark = pytest.mark.integration
 
@@ -83,7 +83,7 @@ class TestDependencyInjection:
         assert isinstance(issue, Issue)
         assert issue.id == "DI-1"
         assert issue.title == "DI test issue"
-        assert issue.status == Status.TODO
+        assert issue.status == Status.TO_DO
 
 
 class TestJiraIssueFieldParsing:
@@ -119,9 +119,9 @@ class TestJiraIssueFieldParsing:
 
     @pytest.mark.circleci
     def test_status_normalisation_to_do(self) -> None:
-        """Jira status 'To Do' must normalise to Status.TODO."""
+        """Jira status 'To Do' must normalise to Status.TO_DO."""
         issue = get_issue("T-4", {"summary": "s", "status": {"name": "To Do"}})
-        assert issue.status == Status.TODO
+        assert issue.status == Status.TO_DO
 
     @pytest.mark.circleci
     def test_status_normalisation_in_progress(self) -> None:
@@ -133,13 +133,13 @@ class TestJiraIssueFieldParsing:
     def test_status_normalisation_done(self) -> None:
         """Jira status 'Done' must normalise to Status.COMPLETE."""
         issue = get_issue("T-6", {"summary": "s", "status": {"name": "Done"}})
-        assert issue.status == Status.COMPLETE
+        assert issue.status == Status.COMPLETED
 
     @pytest.mark.circleci
     def test_unknown_status_defaults_to_todo(self) -> None:
-        """Unrecognised Jira status must fall back to Status.TODO."""
+        """Unrecognised Jira status must fall back to Status.TO_DO."""
         issue = get_issue("T-7", {"summary": "s", "status": {"name": "Some Unrecognised Status"}})
-        assert issue.status == Status.TODO
+        assert issue.status == Status.TO_DO
 
     @pytest.mark.circleci
     def test_assignee_prefers_email_over_display_name(self) -> None:

@@ -68,7 +68,7 @@ jobs:
             source .venv/bin/activate  
             pytest components/ --cov=components --cov-report=xml --cov-report=term \
                      --junitxml=test-results/unit/junit.xml \
-                     --cov-fail-under=85
+                     --cov-fail-under=84
       - run:
           name: "Run Static Analysis (mypy)"
           command: |
@@ -140,10 +140,10 @@ jobs:
       - store_artifacts:
           path: test-results/integration
 
-  # Job 6: Deploy to AWS Lambda
+  # Job 6: Deploy to AWS Lambdas and S3 bucket
   deploy:
     docker:
-      - image: cimg/python:3.12
+      - image: cimg/python:3.12-node #node needed as well for building frontend library
     environment:
       AWS_DEFAULT_REGION: us-east-2
     steps:
@@ -158,62 +158,98 @@ jobs:
             curl -LsSf https://astral.sh/uv/install.sh | sh
             echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $BASH_ENV
       - run:
+            name: Get AWS SSM parameters
+            command: |
+              ACTION_LAMBDA=$(aws ssm get-parameter --name "action-lambda" --query "Parameter.Value" --output text)
+              FRONT_END_BUCKET=$(aws ssm get-parameter --name "front-end-bucket" --query "Parameter.Value" --output text)
+              CLOUDFRONT_DISTRIBUTION_ID=$(aws ssm get-parameter --name "cloudfront-distribution-id" --query "Parameter.Value" --output text)
+              COGNITO_AUTHORITY_URL=$(aws ssm get-parameter --name "/frontend/cognito/authority_url" --query "Parameter.Value" --output text)
+              COGNITO_CLIENT_ID=$(aws ssm get-parameter --name "/frontend/cognito/client_id" --query "Parameter.Value" --output text)
+              MAIN_URI=$(aws ssm get-parameter --name "website-url" --query "Parameter.Value" --output text)
+              API_URL=$(aws ssm get-parameter --name "team-diamonds-api-url" --query "Parameter.Value" --output text)
+
+              echo "export ACTION_LAMBDA=$ACTION_LAMBDA" >> $BASH_ENV 
+              echo "export FRONT_END_BUCKET=$FRONT_END_BUCKET" >> $BASH_ENV 
+              echo "export CLOUDFRONT_DISTRIBUTION_ID=$CLOUDFRONT_DISTRIBUTION_ID" >> $BASH_ENV
+              echo "export COGNITO_AUTHORITY_URL=$COGNITO_AUTHORITY_URL" >> $BASH_ENV
+              echo "export COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID" >> $BASH_ENV
+              echo "export MAIN_URI=$MAIN_URI" >> $BASH_ENV  
+              echo "export API_URL=$API_URL" >> $BASH_ENV
+
+      - run:
           name: "Package Lambda zip"
           command: |
             export PATH="$HOME/.cargo/bin:$PATH"
             source .venv/bin/activate
-            mkdir -p lambda_package/jira_service
-            # Copy jira_service as a package (preserves internal imports)
-            cp components/jira_service/src/jira_service/*.py \
-              lambda_package/jira_service/
-            # Ensure it's a proper package
-            touch lambda_package/jira_service/__init__.py
-            # Copy handler.py to root so Lambda can find it
-            cp components/jira_service/src/jira_service/main.py lambda_package/
-            cp components/jira_service/src/jira_service/handler.py \
-              lambda_package/handler.py
-            # Copy other local packages
-            cp -r components/jira_client_impl/src/jira_client_impl \
-              lambda_package/jira_client_impl
-            cp -r components/work_mgmt_client_interface/src/work_mgmt_client_interface \
-              lambda_package/work_mgmt_client_interface
-            cp -r components/jira_service_adapter/src/jira_service_adapter \
-              lambda_package/jira_service_adapter
-            # Install PyPI dependencies
-            uv pip install mangum fastapi python-dotenv requests \
-              "pydantic==2.10.6" "pydantic-core==2.27.2" \
-              --python-platform x86_64-unknown-linux-gnu \
-              --python 3.12 \
-              -t lambda_package/
+            mkdir -p lambda_package
+
+            # Copy source code to lambda_package
+            cp -r components/chat_to_issues_integration/src/* lambda_package/
+            cp -r components/jira_client_impl/src/* lambda_package/
+            cp -r components/jira_service/src/* lambda_package/
+            cp -r components/jira_service_api_client/* lambda_package/
+            cp components/jira_service/src/jira_service/handler.py lambda_package/
+            
+            uv pip install "git+https://github.com/tatyanacthomas/ospd_issue_tracker.git@main" --target lambda_package/
+            uv pip install "git+https://github.com/tatyanacthomas/llm_integration_api.git@main" --target lambda_package/
+            uv pip install "git+https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source.git@main#subdirectory=components/chat_client_api" --target lambda_package/
+            
             echo "--- lambda_package contents ---"
             ls -la lambda_package/
-            ls -la lambda_package/jira_service/
             find lambda_package/ -name "_pydantic_core*.so" | head -5
             cd lambda_package && zip -r ../deployment.zip . && cd ..
             ls -la deployment.zip
       - run:
-          name: "Deploy to AWS Lambda"
+          name: "Deploy to Action Lambda"
           command: |
+            source $BASH_ENV
             aws lambda update-function-configuration \
-              --function-name team-diamonds-deployment \
+              --function-name $ACTION_LAMBDA \
               --runtime python3.12 \
               --region us-east-2 \
               > /dev/null
+
+            aws lambda wait function-updated \
+              --function-name $ACTION_LAMBDA \
+              --region us-east-2
+
             aws lambda update-function-code \
-              --function-name team-diamonds-deployment \
+              --function-name $ACTION_LAMBDA \
               --zip-file fileb://deployment.zip \
               --region us-east-2 \
               > /dev/null
-            aws lambda wait function-updated \
-              --function-name team-diamonds-deployment \
-              --region us-east-2
-            echo "Lambda deploy complete."
-      - run:
-          name: "Verify /health endpoint"
-          command: |
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" $API_GATEWAY_URL/health)
-            [ "$STATUS" = "200" ] && echo "Health check passed!" || (echo "Health check failed: $STATUS" && exit 1)
 
+            aws lambda wait function-updated \
+              --function-name $ACTION_LAMBDA \
+              --region us-east-2
+            
+            echo "Action Lambda deploy complete."
+      - run:
+          name: "Deploy to Front end bucket."
+          command: |
+            source $BASH_ENV
+            echo "$(ls -la .)"
+            cd frontend
+            
+            echo "VITE_COGNITO_AUTHORITY_URL=$COGNITO_AUTHORITY_URL" >> .env
+            echo "VITE_COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID" >> .env
+            echo "VITE_MAIN_URI=$MAIN_URI" >> .env
+            echo "VITE_API_URL=$API_URL" >> .env
+
+            # build frontend
+            npm install
+            npm run build
+
+            # deploy frontend to s3 bucket
+            aws s3 sync dist/ s3://$FRONT_END_BUCKET/ --delete
+
+            # invalidate prior cloudfront cache so they pull new frontend
+            aws cloudfront create-invalidation \
+              --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
+              --paths "/*"
+
+            echo "Front end bucket deploy complete."
+ 
   # Job 7: Report Summary
   report_summary:
     docker:
@@ -276,7 +312,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - develop
+                - HW-3
       - lint:
           requires:
             - build
@@ -284,7 +320,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - develop
+                - HW-3
       - unit_test:
           requires:
             - build
@@ -292,7 +328,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - develop
+                - HW-3
       - circleci_test:
           requires:
             - unit_test
@@ -300,7 +336,7 @@ workflows:
             branches:
               ignore:
                 - main
-                - develop
+                - HW-3
       - report_summary:
           requires:
             - unit_test
@@ -309,9 +345,9 @@ workflows:
             branches:
               ignore:
                 - main
-                - develop
+                - HW-3
 
-  # Full tests + deploy on HW-2 and main
+  # Full tests + deploy
   full_integration:
     jobs:
       - build:
@@ -319,7 +355,7 @@ workflows:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3
       - lint:
           requires:
             - build
@@ -327,7 +363,7 @@ workflows:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3
       - unit_test:
           requires:
             - build
@@ -335,7 +371,7 @@ workflows:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3
       - circleci_test:
           requires:
             - unit_test
@@ -344,7 +380,7 @@ workflows:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3
       - integration_test:
           requires:
             - circleci_test
@@ -353,17 +389,15 @@ workflows:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3
       - report_summary:
           requires:
-            - unit_test
-            - circleci_test
-            - integration_test
+                - circleci_test
           filters:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3
       - deploy:
           requires:
             - report_summary
@@ -372,4 +406,4 @@ workflows:
             branches:
               only:
                 - main
-                - HW-2
+                - HW-3

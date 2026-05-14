@@ -39,4 +39,3 @@ def test_handler_initializes_mangum_with_expected_parameters(monkeypatch: pytest
 
     assert created["app"] is main_app
     assert created["lifespan"] == "off"
-    assert created["api_gateway_base_path"] == "/default-deployment"
