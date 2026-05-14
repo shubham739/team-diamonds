@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from http import HTTPStatus
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from api.issue import Status
 
-from jira_service_adapter.adapter import IssueNotFoundError, JiraServiceAdapter, get_client
+from jira_service_adapter.adapter import IssueNotFoundError, JiraServiceAdapter, ServiceClientError, get_client
 from jira_service_adapter.issue import ServiceIssue
-from jira_service_api_client.client import ServiceIssueNotFoundError
-from jira_service_api_client.models import IssueData
-from jira_service_api_client.models import Status as ServiceStatus
+from jira_service_api_client.models.status import Status as ServiceStatus
 
 pytestmark = pytest.mark.unit
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -26,23 +26,30 @@ def _make_data(
     issue_id: str = "TD-1",
     title: str = "Test issue",
     desc: str = "A description",
-    status: ServiceStatus = ServiceStatus.TO_DO,
+    status: Any = ServiceStatus.TO_DO,
     members: list[str] | None = None,
     due_date: str | None = None,
-) -> IssueData:
-    return IssueData(
-        id=issue_id,
-        title=title,
-        desc=desc,
-        status=status,
-        members=members,
-        due_date=due_date,
-    )
+) -> dict[str, Any]:
+    return {
+        "id": issue_id,
+        "title": title,
+        "desc": desc,
+        "status": str(status),
+        "members": members,
+        "due_date": due_date,
+    }
+
+
+def _make_api_response(status_code: HTTPStatus, data: dict[str, Any]) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.parsed.additional_properties = data
+    return resp
 
 
 @pytest.fixture
 def mock_http() -> MagicMock:
-    """Return a mock JiraServiceClient."""
+    """Return a mock AuthenticatedClient."""
     return MagicMock()
 
 
@@ -69,7 +76,7 @@ class TestServiceIssue:
         assert issue.due_date == "2025-12-31"
 
     def test_status_mapping_in_progress(self) -> None:
-        data = _make_data(status=ServiceStatus.IN_PROGRESS)
+        data = _make_data(status="in_progress")
         assert ServiceIssue(data).status == Status.IN_PROGRESS
 
     def test_status_mapping_complete(self) -> None:
@@ -93,17 +100,28 @@ class TestServiceIssue:
 
 
 class TestGetIssue:
-    def test_returns_service_issue(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.get_issue.return_value = _make_data()
-        result = adapter.get_issue("TD-1")
+    def test_returns_service_issue(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, _make_data())
+        with patch("jira_service_adapter.adapter.get_issue_issues_issue_id_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            result = adapter.get_issue("TD-1")
         assert isinstance(result, ServiceIssue)
         assert result.id == "TD-1"
-        mock_http.get_issue.assert_called_once_with("TD-1")
+        mock_ep.sync_detailed.assert_called_once_with("TD-1", client=adapter._client)
 
-    def test_raises_issue_not_found(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.get_issue.side_effect = ServiceIssueNotFoundError("not found")
-        with pytest.raises(IssueNotFoundError):
-            adapter.get_issue("TD-999")
+    def test_raises_issue_not_found(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.NOT_FOUND, {})
+        with patch("jira_service_adapter.adapter.get_issue_issues_issue_id_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            with pytest.raises(IssueNotFoundError):
+                adapter.get_issue("TD-999")
+
+    def test_raises_service_client_error_on_server_error(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.INTERNAL_SERVER_ERROR, {})
+        with patch("jira_service_adapter.adapter.get_issue_issues_issue_id_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            with pytest.raises(ServiceClientError):
+                adapter.get_issue("TD-1")
 
 
 # ---------------------------------------------------------------------------
@@ -112,34 +130,44 @@ class TestGetIssue:
 
 
 class TestGetIssues:
-    def test_yields_issues(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.get_issues.return_value = [_make_data("TD-1"), _make_data("TD-2")]
-        results = list(adapter.get_issues())
+    def test_yields_issues(self, adapter: JiraServiceAdapter) -> None:
+        data = [_make_data("TD-1"), _make_data("TD-2")]
+        resp = _make_api_response(HTTPStatus.OK, {"issues": data})
+        with patch("jira_service_adapter.adapter.list_issues_issues_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            results = list(adapter.get_issues())
         assert len(results) == 2
         assert all(isinstance(r, ServiceIssue) for r in results)
 
-    def test_passes_filters_to_client(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.get_issues.return_value = []
-        list(adapter.get_issues(title="bug", desc="D", members=["alice@example.com"], status=Status.IN_PROGRESS, max_results=5))
-        mock_http.get_issues.assert_called_once_with(
-            title="bug",
-            desc="D",
-            status=ServiceStatus.IN_PROGRESS,
-            members=["alice@example.com"],
-            due_date=None,
-            max_results=5,
-        )
+    def test_passes_filters_to_client(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, {"issues": []})
+        with patch("jira_service_adapter.adapter.list_issues_issues_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            list(adapter.get_issues(title="bug", desc="D", members=["alice@example.com"], status=Status.IN_PROGRESS, max_results=5))
+            mock_ep.sync_detailed.assert_called_once_with(
+                client=adapter._client,
+                title="bug",
+                desc="D",
+                status=ServiceStatus.IN_PROGRESS,
+                members=["alice@example.com"],
+                due_date=None,
+                max_results=5,
+            )
 
-    def test_returns_iterator(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.get_issues.return_value = [_make_data()]
-        result = adapter.get_issues()
+    def test_returns_iterator(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, {"issues": [_make_data()]})
+        with patch("jira_service_adapter.adapter.list_issues_issues_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            result = adapter.get_issues()
         assert isinstance(result, Iterator)
 
-    def test_none_status_passes_none(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.get_issues.return_value = []
-        list(adapter.get_issues(status=None))
-        call_kwargs = mock_http.get_issues.call_args.kwargs
-        assert call_kwargs["status"] is None
+    def test_none_status_passes_none(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, {"issues": []})
+        with patch("jira_service_adapter.adapter.list_issues_issues_get") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            list(adapter.get_issues(status=None))
+            call_kwargs = mock_ep.sync_detailed.call_args.kwargs
+            assert call_kwargs["status"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -148,30 +176,34 @@ class TestGetIssues:
 
 
 class TestCreateIssue:
-    def test_returns_created_issue(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.create_issue.return_value = _make_data(title="New issue")
-        result = adapter.create_issue(title="New issue")
+    def test_returns_created_issue(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.CREATED, _make_data(title="New issue"))
+        with patch("jira_service_adapter.adapter.create_issue_issues_post") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            result = adapter.create_issue(title="New issue")
         assert isinstance(result, ServiceIssue)
         assert result.title == "New issue"
 
-    def test_passes_all_fields(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.create_issue.return_value = _make_data()
-        adapter.create_issue(
-            title="T",
-            desc="D",
-            status=Status.IN_PROGRESS,
-            members=["bob"],
-            due_date="2025-01-01",
-            board_id="BOARD-1",
-        )
-        mock_http.create_issue.assert_called_once_with(
-            title="T",
-            desc="D",
-            status=ServiceStatus.IN_PROGRESS,
-            members=["bob"],
-            due_date="2025-01-01",
-            board_id="BOARD-1",
-        )
+    def test_passes_all_fields(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.CREATED, _make_data())
+        with patch("jira_service_adapter.adapter.create_issue_issues_post") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            adapter.create_issue(
+                title="T",
+                desc="D",
+                status=Status.IN_PROGRESS,
+                members=["bob"],
+                due_date="2025-01-01",
+                board_id="BOARD-1",
+            )
+            call_kwargs = mock_ep.sync_detailed.call_args.kwargs
+            body = call_kwargs["body"]
+            assert body.title == "T"
+            assert body.desc == "D"
+            assert body.status == ServiceStatus.IN_PROGRESS
+            assert body.members == ["bob"]
+            assert body.due_date == "2025-01-01"
+            assert body.board_id == "BOARD-1"
 
 
 # ---------------------------------------------------------------------------
@@ -180,22 +212,29 @@ class TestCreateIssue:
 
 
 class TestUpdateIssue:
-    def test_returns_updated_issue(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.update_issue.return_value = _make_data(title="Updated")
-        result = adapter.update_issue("TD-1", title="Updated")
+    def test_returns_updated_issue(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, _make_data(title="Updated"))
+        with patch("jira_service_adapter.adapter.update_issue_issues_issue_id_put") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            result = adapter.update_issue("TD-1", title="Updated")
         assert result.title == "Updated"
 
-    def test_only_set_fields_forwarded(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.update_issue.return_value = _make_data()
-        adapter.update_issue("TD-1", status=Status.COMPLETED)
-        call_kwargs = mock_http.update_issue.call_args.kwargs
-        assert call_kwargs["status"] == ServiceStatus.COMPLETED
-        assert call_kwargs.get("title") is None
+    def test_only_set_fields_forwarded(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, _make_data())
+        with patch("jira_service_adapter.adapter.update_issue_issues_issue_id_put") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            adapter.update_issue("TD-1", status=Status.COMPLETED)
+            call_kwargs = mock_ep.sync_detailed.call_args.kwargs
+            body = call_kwargs["body"]
+            assert body.status == ServiceStatus.COMPLETED
+            assert body.title is None
 
-    def test_raises_issue_not_found(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.update_issue.side_effect = ServiceIssueNotFoundError("not found")
-        with pytest.raises(IssueNotFoundError):
-            adapter.update_issue("TD-999", title="x")
+    def test_raises_issue_not_found(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.NOT_FOUND, {})
+        with patch("jira_service_adapter.adapter.update_issue_issues_issue_id_put") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            with pytest.raises(IssueNotFoundError):
+                adapter.update_issue("TD-999", title="x")
 
 
 # ---------------------------------------------------------------------------
@@ -204,14 +243,19 @@ class TestUpdateIssue:
 
 
 class TestDeleteIssue:
-    def test_calls_client_delete(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        adapter.delete_issue("TD-1")
-        mock_http.delete_issue.assert_called_once_with("TD-1")
+    def test_calls_endpoint_delete(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.OK, {})
+        with patch("jira_service_adapter.adapter.delete_issue_issues_issue_id_delete") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            adapter.delete_issue("TD-1")
+        mock_ep.sync_detailed.assert_called_once_with("TD-1", client=adapter._client)
 
-    def test_raises_issue_not_found(self, adapter: JiraServiceAdapter, mock_http: MagicMock) -> None:
-        mock_http.delete_issue.side_effect = ServiceIssueNotFoundError("not found")
-        with pytest.raises(IssueNotFoundError):
-            adapter.delete_issue("TD-999")
+    def test_raises_issue_not_found(self, adapter: JiraServiceAdapter) -> None:
+        resp = _make_api_response(HTTPStatus.NOT_FOUND, {})
+        with patch("jira_service_adapter.adapter.delete_issue_issues_issue_id_delete") as mock_ep:
+            mock_ep.sync_detailed.return_value = resp
+            with pytest.raises(IssueNotFoundError):
+                adapter.delete_issue("TD-999")
 
 
 # ---------------------------------------------------------------------------

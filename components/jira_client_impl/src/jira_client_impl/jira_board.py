@@ -11,7 +11,6 @@ from api.issue import Issue, Status
 if TYPE_CHECKING:
     from jira_client_impl.jira_impl import JiraClient
 
-
 @dataclass(frozen=True)
 class JiraColumn:
     """Lightweight board column descriptor used by JiraBoard."""

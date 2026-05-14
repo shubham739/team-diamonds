@@ -34,7 +34,6 @@ _JIRA_STATUS_MAP: dict[str, Status] = {
     "rejected": Status.COMPLETED,
 }
 
-
 def _normalize_status(jira_status: str | None) -> Status:
     if not jira_status:
         return Status.TO_DO
@@ -186,7 +185,6 @@ class JiraIssue(Issue):  # type: ignore[misc]
 # Extract data from ADF format which Jira stores description in
 # ---------------------------------------------------------------------------
 
-
 def _extract_adf_text(node: dict[str, Any]) -> str:
     """Recursively extract plain text from an ADF document node."""
     if not isinstance(node, dict):
@@ -196,11 +194,9 @@ def _extract_adf_text(node: dict[str, Any]) -> str:
     parts = [_extract_adf_text(child) for child in node.get("content") or []]
     return "\n".join(filter(None, parts))
 
-
 # ---------------------------------------------------------------------------
 # Get issue
 # ---------------------------------------------------------------------------
-
 
 def get_issue(
     issue_id: str,

@@ -41,6 +41,10 @@ from jira_client_impl.jira_issue import get_issue as _make_issue
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> b9de804 (feat: Implement AI integration)
 # A precise definition of what JSON can actually contain!
 JsonData: TypeAlias = dict[str, "JsonData"] | list["JsonData"] | str | int | float | bool | None  # noqa: UP040
 
@@ -96,6 +100,7 @@ class IssueNotFoundError(BaseIssueNotFoundError):
     """Raise when a requested Jira issue does not exist."""
 
 
+
 def sanitize_input(value: str) -> str:
     """Sanitize input."""
     return re.sub(JIRA_SPECIAL_CHARS, r"\\\1", value)
@@ -143,6 +148,20 @@ class JiraClient:
         """
         self._base_url = base_url.rstrip("/")
         self._session = requests.Session()
+        if access_token:
+            # OAuth2 bearer token mode — used by the FastAPI service per-user path
+            self._session.headers.update(
+                {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+            )
+        else:
+            # API token / Basic Auth mode — used by the local library path
+            self._auth = HTTPBasicAuth(user_email, api_token)
+            self._session.auth = self._auth
+            self._session.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
         if access_token:
             # OAuth2 bearer token mode — used by the FastAPI service per-user path
             self._session.headers.update(
@@ -341,14 +360,18 @@ class JiraClient:
         status: Status | None = None,
         members: list[str] | None = None,
         due_date: str | None = None,
-        board_id: str | None = None,  # noqa: ARG002
+        board_id: str | None = None,
     ) -> JiraIssue:
         # A board is a required field in Jira, and likely all other issue tracker implementations
         """Create a new Jira issue and return it as a JiraIssue."""
-        # required fields -- title and issue type
+        # Use board_id as project key if provided, otherwise use OPS as default
+        project_key = board_id or "OPS"
+
+        # required fields -- title, issue type, and project
         fields: dict[str, Any] = {
+            "project": {"key": project_key},
             "summary": title,
-            "issuetype": {"name": "Issue"},
+            "issuetype": {"name": "Task"},
         }
         if desc:
             # Jira Cloud expects Atlassian Document Format for description
@@ -503,6 +526,8 @@ class JiraClient:
     def get_lists(self, board_id: str) -> Iterator[Any]:
         """List access is not currently supported in this checkout."""
         raise NotImplementedError
+        """List access is not currently supported in this checkout."""
+        raise NotImplementedError
 
     # ------------------------------------------------------------------
     # Status transition helper
@@ -515,7 +540,6 @@ class JiraClient:
         said transition by its ID.
         """
         # since our status value have an undercore, this changes the underscores to spaces, and lowers text
-        target.value.replace("_", " ").lower()
 
         # calls the Jira API to get a list of transitions available for this issue
         data = self._get(f"/issue/{issue_id}/transitions")
@@ -553,6 +577,7 @@ class JiraClient:
 # ---------------------------------------------------------------------------
 
 
+
 def _text_to_adf(text: str) -> dict[str, Any]:
     """Translate text to adf format.
 
@@ -578,6 +603,7 @@ def _text_to_adf(text: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Get client
 # ---------------------------------------------------------------------------
+
 
 
 def get_client(*, interactive: bool = False) -> JiraClient:
