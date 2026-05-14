@@ -1,255 +1,206 @@
-# Cross-Vertical Integration: Jira (Team 1) ↔ Slack (Team 9)
+# Cross-Vertical Integration: Jira (Team 1)and Slack (Team 9)
 
 ## Overview
 
-This document describes the cross-vertical integration between our Jira issue tracker service (Team 1) and Team 9's Slack chat service, satisfying the HW3 requirements for cross-vertical integration.
+This document describes the cross-vertical integration between our Jira service (Team 1) and Team 9's Slack chat service. Our service consumes Team 9's published `chat-client-api` package and integrates it into the `/chat-relay` endpoint, which runs an AI chat loop against Jira and posts the result to a Slack channel via Team 9's DI-based client interface.
 
 ## Architecture
 
-### Integration Pattern
-
-We use **Team 9's published `chat-client-api` package** with dependency injection:
-
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Jira Service (Team 1)                     │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  /chat-relay Endpoint                                   │ │
-│  │  1. Receives AI chat message                            │ │
-│  │  2. AI creates Jira issue via tool calling              │ │
-│  │  3. Posts result to Slack via Team 9's get_client()     │ │
-│  └────────────────────────────────────────────────────────┘ │
-│                           ↓                                  │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  Team 9's chat-client-api (Dependency Injection)        │ │
-│  │  - get_client() returns registered Slack client         │ │
-│  │  - Transparent provider swapping (Slack/Discord/etc)    │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│              Team 9's Slack Service                          │
-│  - Receives messages via chat-client-api interface           │
-│  - Posts to Slack channels                                   │
-└─────────────────────────────────────────────────────────────┘
+User / Frontend
+     │
+     ▼  POST /chat-relay  (Bearer token)
+jira-service  (FastAPI on AWS Lambda)
+     │
+     ├──▶ AI chat loop (OpenRouter LLM + Jira tool calls)
+     │         │
+     │         ▼
+     │    jira-client-impl  →  Jira REST API
+     │
+     └──▶ _notify_chat_service()
+               │
+               ├── [primary]  Team 9's get_client().send_message()
+               │              via chat-client-api DI system
+               │
+               └── [fallback] HTTP POST to CHAT_CLIENT_SERVICE_BASE_URL/messages
+                              (used if chat-client-api package is unavailable)
 ```
 
-## HW3 Requirements Satisfied
+## How We Use Team 9's `chat-client-api`
 
-### 1. Pulls Another Vertical's Published API (4 pts) ✅
+### 1. Declared as a dependency in `pyproject.toml`
 
-**Requirement:** "Project depends on at least one other vertical's shared API. The dependency is declared in `pyproject.toml`, not vendored ad-hoc."
-
-**Implementation:**
 ```toml
-# pyproject.toml
+[project]
 dependencies = [
-    "chat-client-api",  # Team 9's published package
-    # ...
+    "chat-client-api",
+    ...
 ]
 
 [tool.uv.sources]
-chat-client-api = { 
-    git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source.git", 
-    subdirectory = "components/chat_client_api", 
-    branch = "main" 
+chat-client-api = {
+    git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source.git",
+    subdirectory = "components/chat_client_api",
+    branch = "main"
 }
 ```
 
-### 2. Dependency Injection Across Verticals (4 pts) ✅
+### 2. Imported at startup with a graceful fallback
 
-**Requirement:** "The external vertical's client is injected via the `get_client()` pattern from HW1. Swapping between two providers in that vertical (e.g., Discord ↔ Slack) is transparent to the consumer."
-
-**Implementation:**
 ```python
 # components/jira_service/src/jira_service/main.py
 
-# Import Team 9's DI system
-from chat_client_api.client import get_client as get_chat_client
-from chat_client_api.client import register_client as register_chat_client
-
-# Register our Slack client at startup
-@app.on_event("startup")
-def register_slack_client_with_team9():
-    from chat_to_issues_integration.slack_client import SlackChatClient
-    
-    def create_slack_client():
-        return SlackChatClient()
-    
-    register_chat_client(create_slack_client)
-
-# Use Team 9's get_client() to send messages
-def _notify_chat_service(channel_id: str, text: str, session_id: str):
-    chat_client = get_chat_client()  # Gets our registered Slack client
-    chat_client.send_message(channel_id, text)
+try:
+    from chat_client_api.client import get_client as get_chat_client
+    from chat_client_api.client import register_client as register_chat_client
+    CHAT_CLIENT_AVAILABLE = True
+except ImportError:
+    get_chat_client = None
+    register_chat_client = None
+    CHAT_CLIENT_AVAILABLE = False
 ```
 
-**Provider Swapping:** If Team 9 or another team provides a Discord implementation, we can swap it by simply registering a different client factory - no code changes needed in our service.
+If the package is unavailable (e.g. in CI without the dependency), the service falls back to direct HTTP calls. No crash, no broken endpoints.
 
-### 3. Integration Tests Verify Systems Work Together (4 pts) ✅
+### 3. Our `SlackChatClient` is registered at app startup
 
-**Requirement:** "Tests live under `tests/integration/` and assert on actual behavior of the combined flow. Integration tests that mock all components are an anti-pattern. AI-tool-call → cross-vertical-action pathways are explicitly covered."
-
-**Implementation:**
-- `tests/integration/test_cross_vertical_integration.py`
-- Tests verify:
-  - Team 9's package is imported successfully
-  - Dependency injection pattern works
-  - `/chat-relay` endpoint exists and integrates AI → Jira → Slack
-  - Slack client is registered at startup
-
-## User Flow
-
-### End-User Onboarding
-
-1. **Authenticate with Jira** (`GET /auth/login`)
-   - User logs into Jira via OAuth2
-   - Receives access token
-
-2. **Link Team 9's Chat Service** (`GET /auth/callback`)
-   - Callback returns `team9_login_url`
-   - User redirects to Team 9's service to authenticate with Slack
-   - Team 9 stores Slack credentials and returns session ID
-
-3. **Select Slack Channel** (`GET /auth/channels`, `POST /auth/select-channel`)
-   - User fetches available Slack channels
-   - Selects a channel for notifications
-
-4. **Use AI Chat with Cross-Vertical Integration** (`POST /chat-relay`)
-   - User sends natural language message
-   - AI creates Jira issue via tool calling
-   - Result is posted to selected Slack channel via Team 9's `get_client()`
-
-### Example Request
-
-```bash
-# Step 1: Authenticate with Jira
-curl -X GET https://your-service.com/auth/login
-
-# Step 2: Complete OAuth callback (automatic redirect)
-# Returns: { "team9_login_url": "https://team9.com/slack/auth?session=..." }
-
-# Step 3: Authenticate with Team 9's Slack service (browser redirect)
-
-# Step 4: Select a Slack channel
-curl -X GET https://your-service.com/auth/channels \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-curl -X POST https://your-service.com/auth/select-channel \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"channel_id": "C12345"}'
-
-# Step 5: Send AI chat message with cross-vertical integration
-curl -X POST https://your-service.com/chat-relay \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Create issue: Fix login bug on mobile"}'
-
-# Result:
-# 1. AI creates Jira issue "Fix login bug on mobile"
-# 2. Issue details posted to Slack channel C12345 via Team 9's service
-```
-
-## Technical Details
-
-### Fallback Strategy
-
-Our implementation includes a fallback to HTTP-based communication if Team 9's `chat-client-api` is not available:
+Using Team 9's `register_client()` DI hook, we register a factory for our Slack client during the FastAPI lifespan startup event:
 
 ```python
-def _notify_chat_service(channel_id: str, text: str, session_id: str):
-    # Try Team 9's get_client() first (preferred)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if CHAT_CLIENT_AVAILABLE and register_chat_client is not None:
+        try:
+            from chat_to_issues_integration.slack_client import SlackChatClient
+
+            def create_slack_client() -> SlackChatClient:
+                return SlackChatClient()
+
+            register_chat_client(create_slack_client)
+        except Exception as e:
+            logger.warning("Failed to register Slack client with Team 9: %s", e)
+    yield
+```
+
+This follows the same `get_client()` / `register_client()` dependency injection pattern established in HW1. Swapping Slack for Discord or another provider requires only changing the registered factory — no other code changes.
+
+### 4. Used in `_notify_chat_service()` to send messages
+
+When `/chat-relay` produces a reply, it calls `_notify_chat_service()`, which tries Team 9's DI client first and falls back to HTTP:
+
+```python
+def _notify_chat_service(channel_id: str, text: str, session_id: str) -> bool:
+    # Primary: Team 9's DI client
     if CHAT_CLIENT_AVAILABLE and get_chat_client is not None:
         try:
             chat_client = get_chat_client()
             chat_client.send_message(channel_id, text)
-            return
+            return True
         except Exception as exc:
-            logger.warning("Failed to use Team 9's chat client: %s", exc)
-    
-    # Fallback to HTTP (backward compatibility)
-    base_url = os.environ.get("CHAT_CLIENT_SERVICE_BASE_URL", "")
-    # ... HTTP POST to Team 9's service
+            logger.warning("Falling back to HTTP: %s", exc)
+
+    # Fallback: direct HTTP POST
+    base_url = os.environ.get("CHAT_CLIENT_SERVICE_BASE_URL", "").rstrip("/")
+    resp = httpx.post(f"{base_url}/messages",
+                      json={"channel": channel_id, "text": text},
+                      headers={"X-Session-ID": session_id})
+    return resp.is_success
 ```
 
-This ensures:
-- ✅ Full credit for using Team 9's DI pattern when available
-- ✅ Backward compatibility if package not installed
-- ✅ Graceful degradation in production
+---
 
-### Environment Variables
+## The `/chat-relay` Endpoint
+
+`POST /chat-relay` is the primary cross-vertical endpoint. It:
+
+1. Resolves the user's session (from in-memory store or DynamoDB — needed because Lambda is stateless)
+2. Auto-selects a Team 9 channel if none has been picked yet
+3. Runs the AI chat loop (`_run_chat_loop`) — same logic as `/chat`, includes `@jira` tool calling
+4. Posts the AI reply to Slack via `_notify_chat_service()`
+5. Retries other available channels if the first one fails
+6. Returns a login prompt if the Team 9 session needs re-authentication
+
+---
+
+## User Onboarding Flow
+
+Users must connect both Jira and Slack before using `/chat-relay`:
+
+| Step | Endpoint | What Happens |
+|------|----------|-------------|
+| 1 | `POST /auth/login` `{"action":"get_auth_url","provider":"jira"}` | Get Jira OAuth2 URL |
+| 2 | Browser → Atlassian → `GET /auth/callback` | Exchange code for token, create Team 9 chat session, store in DynamoDB |
+| 3 | `POST /auth/login` `{"action":"get_auth_url","provider":"slack"}` | Get Slack connect URL |
+| 4 | Browser → `GET /auth/callback?state=...` (Slack path) | Create Team 9 chat session, auto-select first available channel |
+| 5 | `GET /auth/channels` | List available Team 9 Slack channels |
+| 6 | `POST /auth/select-channel` `{"channel_id":"C12345"}` | Store chosen channel in session + DynamoDB |
+| 7 | `POST /chat-relay` `{"message":"@jira create issue: Fix bug"}` | AI runs, Jira issue created, reply posted to Slack |
+
+### Example: send a message through the full flow
 
 ```bash
-# Jira OAuth2
-JIRA_OAUTH_CLIENT_ID=your_client_id
-JIRA_OAUTH_CLIENT_SECRET=your_client_secret
-JIRA_OAUTH_REDIRECT_URI=http://localhost:8000/auth/callback
-
-# Team 9's Chat Service
-CHAT_CLIENT_SERVICE_BASE_URL=https://team9-service.com
-
-# AI Integration
-OPENROUTER_API_KEY=your_openrouter_key
-
-# Slack (for our SlackChatClient)
-SLACK_BOT_TOKEN=xoxb-your-token
-```
-
-## Testing
-
-### Run Integration Tests
-
-```bash
-# Run all integration tests
-pytest tests/integration/test_cross_vertical_integration.py -v
-
-# Run with coverage
-pytest tests/integration/test_cross_vertical_integration.py --cov --cov-report=term-missing
-```
-
-### Manual Testing
-
-1. Start the Jira service:
-```bash
-uvicorn jira_service.main:app --reload
-```
-
-2. Complete the authentication flow (see User Flow above)
-
-3. Send a test message:
-```bash
-curl -X POST http://localhost:8000/chat-relay \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+# After completing steps 1-6 above:
+curl -X POST https://baii6ilfl2.execute-api.us-east-2.amazonaws.com/prod/chat-relay \
+  -H "Authorization: Bearer YOUR_JIRA_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Create issue: Test cross-vertical integration"}'
+  -d '{"message": "@jira create an issue called Fix login bug on mobile"}'
+
+# Response:
+# {
+#   "reply": "I've created the issue PROJ-99 'Fix login bug on mobile' with status To Do.",
+#   "actions": [{"tool": "create_issue", "args": {...}, "result": {...}}]
+# }
+# The same reply is also posted to the selected Slack channel via Team 9's service.
 ```
 
-4. Verify:
-   - Jira issue is created
-   - Message appears in Slack channel
-   - Logs show "Successfully sent message via Team 9's chat client"
+---
 
-## Benefits of This Approach
+## Session Persistence (DynamoDB)
 
-1. **Standards Compliance:** Uses Team 9's published API, not ad-hoc HTTP calls
-2. **Provider Agnostic:** Can swap Slack for Discord/Teams without code changes
-3. **Dependency Injection:** Follows HW1 pattern for loose coupling
-4. **Testable:** Clear interfaces make testing straightforward
-5. **Backward Compatible:** Falls back to HTTP if package unavailable
-6. **Production Ready:** Deployed to AWS Lambda with proper error handling
+Because the service runs on AWS Lambda (stateless, multiple instances), sessions are persisted to DynamoDB so any Lambda instance can service any request:
 
-## Future Enhancements
+- **On `/auth/callback`**: Jira token, Team 9 chat session ID, channel ID, and `team9_login_url` are written to the `team-diamonds-tokens` table (`us-east-2`)
+- **On `/chat-relay`**: Session is looked up first from in-memory store, then from DynamoDB, and finally bootstrapped fresh if neither exists (`_get_or_bootstrap_session`)
+- **On channel selection**: `_persist_channel_to_dynamodb()` updates the DynamoDB record so the choice survives instance restarts
 
-- Add support for bidirectional sync (Slack → Jira issue updates)
-- Implement webhook listeners for real-time Slack events
-- Add support for multiple chat providers simultaneously
-- Implement message threading for issue discussions
-- Add rich formatting for Slack messages (buttons, attachments, etc.)
+---
+
+## Deprecated Approaches
+
+Earlier iterations of the cross-vertical integration used different components that are now archived:
+
+- **`components/jira_chat_bridge/`** — a lightweight polling bridge used during cross-team testing; replaced by the direct `chat-client-api` DI integration
+- **`components/chat_to_issues_integration/`** — an earlier attempt at a generalized chat+issue bridge; archived once the Team 9 package DI pattern became the standard
+
+Neither component is in the production pipeline.
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `CHAT_CLIENT_SERVICE_BASE_URL` | Base URL of Team 9's chat service (used for HTTP fallback and channel listing) |
+| `TEAM9_CHANNEL_ID` | Optional: hardcode a channel ID to skip auto-selection |
+| `OPENROUTER_API_KEY` | Required for the AI chat loop |
+
+---
+
+## Integration Tests
+
+```bash
+# Run cross-vertical integration tests
+pytest tests/integration/test_cross_vertical_integration.py -v
+```
+
+Tests verify:
+- Team 9's package imports correctly
+- The `register_client` / `get_client` DI pattern works end-to-end
+- `/chat-relay` endpoint exists and integrates AI → Jira → Slack
+- `SlackChatClient` is registered at startup
 
 ## References
 
 - Team 9's Repository: https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source
-- Team 9's chat-client-api: `components/chat_client_api/`
-- HW3 Rubric: Cross-Vertical Integration (12 pts)
+- Team 9's `chat-client-api`: `components/chat_client_api/`
+

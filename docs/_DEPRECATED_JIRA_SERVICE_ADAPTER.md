@@ -1,5 +1,12 @@
 # Jira Service Adapter (`jira-service-adapter`)
 
+> **⚠️ DEPRECATED**
+> This component is no longer actively used in the production pipeline.
+> Its only runtime consumer was `slack_bot_server.py` inside `chat_to_issues_integration`,
+> which is not deployed. The Slack bot integration was replaced by the direct DI wiring
+> in `jira_service/main.py` (Team 9's `chat_client_api` registry). This package and its
+> tests are retained for reference but should not be relied upon for new development.
+
 ## Overview
 
 `jira-service-adapter` is the **Adapter Pattern** component introduced in HW2.

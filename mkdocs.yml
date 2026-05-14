@@ -3,10 +3,15 @@ site_name: Team Diamonds
 nav:
   - Home: README.md
   - Design: DESIGN.md
-  - Contributing: CONTRIBUTING.md
+  - Deployment Overview: DEPLOYMENT_OVERVIEW.md
+  - Cross-Vertical Integration: CROSS_VERTICAL_INTEGRATION.md
   - Components:
-    - Interface: INTERFACE.md
-    - Jira Implementation: IMPLEMENTATION_JIRA.md
     - Jira Service: JIRA_SERVICE.md
-    - Jira Service API Client: JIRA_SERVICE_API_CLIENT.md
-    - Jira Service Adapter: JIRA_SERVICE_ADAPTER.md
+    - Jira Client Implementation: JIRA_CLIENT_IMPLEMENTATION.md
+    - Chat-to-Issues Integration (partially in use): _DEPRECATED_CHAT_TO_ISSUES_INTEGRATION.md
+  - Contributing: CONTRIBUTING.md
+  - Deprecated (not in production):
+    - Jira Chat Bridge: _DEPRECATED_JIRA_CHAT_BRIDGE.md
+    - Jira Service Adapter: _DEPRECATED_JIRA_SERVICE_ADAPTER.md
+    - Jira Service API Client: _DEPRECATED_JIRA_SERVICE_API_CLIENT.md
+    - Work Mgmt Client Interface: _DEPRECATED_WORK_MGMT_CLIENT_INTERFACE.md

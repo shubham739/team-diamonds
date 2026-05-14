@@ -43,74 +43,61 @@ source .venv/bin/activate  # macOS/Linux
 
 ### Project Structure Overview
 
+Interface contracts are provided by the external `ospd-issue-tracker-api` package. Only production components are listed below; deprecated components (`jira_service_adapter`, `jira_service_api_client`, `work_mgmt_client_interface`, `jira_chat_bridge`, `chat_to_issues_integration`) remain in the repo but are not part of the live deployment.
+
 ```
 ├── components/
-│ ├── (Vendor-neutral interface contracts are provided by the external `api` package)
-│ │
-│ ├── jira_client_impl/                     # Local Jira implementation (Basic Auth + OAuth2)
-│ │ ├── src/
-│ │ │ └── jira_client_impl/
-│ │ │  ├── jira_board.py
-│ │ │  ├── jira_impl.py
-│ │ │  └── jira_issue.py
-│ │ └── tests/
-│ │   └── test_core_methods.py
-│ │
-│ ├── jira_service/                         # FastAPI microservice (HW2)
-│ │ ├── src/
-│ │ │ └── jira_service/
-│ │ │  ├── auth.py
-│ │ │  ├── exceptions.py
-│ │ │  ├── handler.py
-│ │ │  └── main.py
-│ │ └── tests/
-│ │   ├── test_auth.py
-│ │   ├── test_handler.py
-│ │   └── test_api.py
-│ │
-│ ├── jira_service_api_client/              # Type-safe HTTP client for jira-service (HW2)
-│ │ ├── src/
-│ │ │ └── jira_service_api_client/
-│ │ │  ├── client.py
-│ │ │  └── models.py
-│ │ ├── tests/
-│ │    └── test_client.py
-│ │
-│ └── jira_service_adapter/                 # Adapter: api client contract over HTTP (HW2)
-│ ├── src/
-│ │ └── jira_service_adapter/
-│ │ ├── adapter.py
-│ │ └── issue.py
-│ ├── tests/
-│ │ └── test_adapter.py
-│ │
+│   ├── chat_to_issues_integration/           # Only slack_client.py is used in production
+│   │   └── src/
+│   │       └── chat_to_issues_integration/
+│   │           └── slack_client.py           # Provides SlackChatClient — registered at startup in jira_service
+│   │
+│   ├── jira_client_impl/                     # Jira implementation (Basic Auth + OAuth2)
+│   │   ├── src/
+│   │   │   └── jira_client_impl/
+│   │   │       ├── jira_board.py
+│   │   │       ├── jira_impl.py
+│   │   │       └── jira_issue.py
+│   │   └── tests/
+│   │       └── test_core_methods.py
+│   │
+│   └── jira_service/                         # FastAPI service — deployed on AWS Lambda via Mangum
+│       ├── src/
+│       │   └── jira_service/
+│       │       ├── ai_client_api.py          # AI chat loop (OpenRouter / llm-integration-api)
+│       │       ├── auth.py                   # OAuth2 + DynamoDB session management
+│       │       ├── exceptions.py
+│       │       ├── handler.py                # Issue CRUD route handlers
+│       │       └── main.py                   # FastAPI app, startup, Team 9 DI registration
+│       └── tests/
+│           ├── test_ai_client_api.py
+│           ├── test_auth.py
+│           ├── test_handler.py
+│           ├── test_main_helpers.py
+│           └── integration/                  # Cross-vertical integration tests (Team 9)
+│
 ├── tests/
-│ ├── e2e/                                  # End-to-end tests
-│ │ └── test_client_e2e.py
-│ ├── integration/                          # Integration tests (real Jira API, CI-gated)
-│ │ └── test_client_integration.py
-│ └── unit/                                 # Unit tests
+│   ├── e2e/                                  # End-to-end tests (real Jira API, skipped without creds)
+│   │   └── test_client_e2e.py
+│   └── integration/                          # Integration tests (CI-gated)
+│       └── test_client_integration.py
 │
-├── docs/                                   # MkDocs documentation source
-│ ├── CONTRIBUTING.md
-│ ├── DESIGN.md
-│ ├── IMPLEMENTATION_JIRA.md
-│ ├── INTERFACE.md
-│ ├── JIRA_SERVICE.md
-│ ├── JIRA_SERVICE_ADAPTER.md
-│ ├── JIRA_SERVICE_API_CLIENT.md
-│ └── README.md
+├── docs/                                     # MkDocs documentation source
+│   ├── CONTRIBUTING.md
+│   ├── CROSS_VERTICAL_INTEGRATION.md
+│   ├── DEPLOYMENT_OVERVIEW.md
+│   ├── DESIGN.md
+│   ├── JIRA_CLIENT_IMPLEMENTATION.md
+│   ├── JIRA_SERVICE.md
+│   └── README.md
 │
-├── config.yml                              # CI/CD pipeline
-├── Dockerfile                              # Production Docker image
-├── LICENSE                                 # Project license
-├── mkdocs.yml                              # MkDocs configuration
-├── openapi_client_config.yaml              # OpenAPI client config
-├── openapi.json                            # OpenAPI 3.1.0 spec (auto-generated from service)
-├── pyproject.toml                          # Root uv workspace + ruff / mypy / pytest config
-├── README.md                               # This file
-├── render.yaml                             # Legacy - no longer in use
-└── makefile                                # Developer helpers (install, generate-client)
+├── frontend/                                 # React frontend (served via CloudFront)
+├── .circleci/config.yml                      # CI/CD pipeline
+├── Dockerfile                                # Production Docker image
+├── LICENSE                                   # Project license
+├── mkdocs.yml                                # MkDocs configuration
+├── pyproject.toml                            # Root uv workspace + ruff / mypy / pytest config
+└── README.md
 ```
 
 ---
@@ -150,9 +137,8 @@ Please include a summary of the change and which issue is fixed, or which featur
 
 ## Checklist:
 - [ ] I have performed a self-review of my own code
-- [ ] I have tagged
 - [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have tagged the appropiate reviewers
+- [ ] I have tagged the appropriate reviewers
 - [ ] I ran shell command `ruff check . --fix` and verified that there are no formatting errors
 - [ ] I ran shell command `uv run mypy components/ --explicit-package-bases` and verified that there are no formatting errors
 - [ ] I verified that all unit tests pass.

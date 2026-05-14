@@ -1,5 +1,11 @@
+# [DEPRECATED] Work Management Client Interface (`work-mgmt-client-interface`)
+
+> **DEPRECATED — This component is archived and no longer in active use.**
+>
+> The local `work_mgmt_client_interface` package has been replaced by the external [`ospd-issue-tracker-api`](https://github.com/tatyanacthomas/ospd_issue_tracker) package, imported as `api.issue`, `api.board`, etc. All active components (`jira_client_impl`, `jira_service`) depend on that external package directly. This local package is retained for reference only.
+
 ## Overview
-This package defines the contracts that any issue tracker client must implement. It contains no platform-specific logic — only abstract base classes, shared data models, and a factory stub.
+This package defined the contracts that any issue tracker client must implement. It contained no platform-specific logic — only abstract base classes, shared data models, and a factory stub.
 
 ## Package Structure
 | File | Purpose |
