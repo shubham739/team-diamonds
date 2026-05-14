@@ -40,4 +40,11 @@ site/
 **/.DS_Store
 .AppleDouble
 
+#frontend
+frontend/node_modules/
 # Note: uv.lock is intentionally NOT ignored. It should be committed.
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/package-lock.json

@@ -7,8 +7,8 @@ dependencies = [
     "mangum",
     "fastapi",
     "ospd-issue-tracker-api",
-    "mangum",
-    "fastapi",
+    "llm-integration-api",
+    "chat-client-api",
     "jira-client-impl",
     "jira-service",
     "jira-service-api-client",
@@ -20,6 +20,7 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "httpx>=0.27.0",
     "types-requests>=2.32.4.20260107",
+    "boto3>=1.34.0",
 ]
 
 [project.optional-dependencies]
@@ -28,7 +29,6 @@ dev = [
     "mkdocs-material>=9.6.15",
     "mkdocstrings-python>=1.16.12",
     "mypy>=1.17.0",
-    "openapi-python-client>=0.21.0",
     "openapi-python-client>=0.21.0",
     "pymdown-extensions>=10.16.1",
     "pytest>=8.4.1",
@@ -48,6 +48,8 @@ members = [
 
 [tool.uv.sources]
 ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
+llm-integration-api = { git = "https://github.com/tatyanacthomas/llm_integration_api.git", branch = "main" }
+chat-client-api = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source.git", subdirectory = "components/chat_client_api", branch = "main" }
 jira-client-impl = {workspace = true}
 jira-service = {workspace = true}
 jira-service-api-client = {workspace = true}
@@ -67,7 +69,7 @@ ignore = [
   "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
   "S101", # Use of `assert` detected --> Asserts are good in our opinion. Tests use asserts profusely.
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117", "ANN001", "ANN201", "RUF043", "S603"], "**/demo*.py" = ["T201", "INP001", "D400", "D415", "BLE001", "PLR2004", "C901", "PLR0911", "PLR0912", "PLR0915"], "**/slack_demo*.py" = ["T201", "INP001", "D400", "D415", "BLE001", "PLR2004", "C901", "PLR0911", "PLR0912", "PLR0915"], "**/slack_bot_server.py" = ["INP001"] }
+per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415", "PLR2004", "D101", "D102", "D103", "D401", "ERA001", "SIM117", "ANN001", "ANN201", "RUF043", "S603", "PLW0108"], "**/demo*.py" = ["T201", "INP001", "D400", "D415", "BLE001", "PLR2004", "C901", "PLR0911", "PLR0912", "PLR0915"], "**/slack_demo*.py" = ["T201", "INP001", "D400", "D415", "BLE001", "PLR2004", "C901", "PLR0911", "PLR0912", "PLR0915"], "**/slack_bot_server.py" = ["INP001"] }
 
 [tool.ruff.lint.isort]
 known-first-party = [
@@ -86,9 +88,9 @@ strict = true
 explicit_package_bases = true # Required for src layout
 disable_error_code = ["import-untyped"]
 mypy_path = [
+    "components",
     "components/jira_client_impl/src",
     "components/jira_service/src",
-    "components/jira_service_api_client",
     "components/jira_service_api_client",
     "components/jira_service_adapter/src",
     "components/chat_to_issues_integration/src",
@@ -99,16 +101,15 @@ exclude = [
     "main.py",
     "components/work_mgmt_client_interface",
     "components/jira_service_api_client",
-    "components/work_mgmt_client_interface",
-    "components/jira_service_api_client",
 ]
 
 [[tool.mypy.overrides]]
 module = ["api", "api.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
+
 [[tool.mypy.overrides]]
-module = ["api", "api.*"]
+module = ["chat_client_api", "chat_client_api.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
@@ -123,7 +124,7 @@ pythonpath = [
     "components/chat_to_issues_integration/src",
 ]
 testpaths = ["tests", "components/*/tests"]
-addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+addopts = ["--import-mode=importlib"]
 # Remove --cov-fail-under from here — it already lives in [tool.coverage.report]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",

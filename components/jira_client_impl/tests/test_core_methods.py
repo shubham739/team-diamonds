@@ -764,16 +764,51 @@ def test_get_boards_stops_on_empty_values(jira_client_agile: Any) -> None:
     assert boards == []
 
 
-def test_get_oauth_client_raises_on_missing_cloud_id() -> None:
-    """get_oauth_client() raises OSError when JIRA_CLOUD_ID is unset."""
-    env = {k: v for k, v in os.environ.items() if k != "JIRA_CLOUD_ID"}
-    with patch.dict(os.environ, env, clear=True):
-        with pytest.raises(OSError, match="JIRA_CLOUD_ID"):
-            get_oauth_client("some-token")
-
-
-def test_get_oauth_client_returns_client_when_env_set() -> None:
-    """get_oauth_client() returns a JiraClient when JIRA_CLOUD_ID is present."""
-    with patch.dict(os.environ, {"JIRA_CLOUD_ID": "test-cloud-id"}):
-        client = get_oauth_client("my-access-token")
+def test_get_oauth_client_uses_env_var_cloud_id() -> None:
+    """When JIRA_CLOUD_ID is set, get_oauth_client uses it without calling accessible-resources."""
+    with patch.dict(os.environ, {"JIRA_CLOUD_ID": "env-cloud-id"}):
+        with patch("jira_client_impl.jira_impl.requests") as mock_requests:
+            client = get_oauth_client("my-access-token")
     assert isinstance(client, JiraClient)
+    mock_requests.get.assert_not_called()
+
+
+def test_get_oauth_client_fetches_cloud_id_dynamically() -> None:
+    """When JIRA_CLOUD_ID is unset, get_oauth_client fetches the cloud ID from accessible-resources."""
+    env = {k: v for k, v in os.environ.items() if k != "JIRA_CLOUD_ID"}
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = [{"id": "dynamic-cloud-id", "name": "My Jira"}]
+
+    with patch.dict(os.environ, env, clear=True):
+        with patch("jira_client_impl.jira_impl.requests") as mock_requests:
+            mock_requests.get.return_value = mock_resp
+            client = get_oauth_client("my-access-token")
+
+    assert isinstance(client, JiraClient)
+    mock_requests.get.assert_called_once()
+    call_url = mock_requests.get.call_args[0][0]
+    assert "accessible-resources" in call_url
+
+
+def test_get_oauth_client_raises_when_no_resources_returned() -> None:
+    """get_oauth_client raises OSError when accessible-resources returns an empty list."""
+    env = {k: v for k, v in os.environ.items() if k != "JIRA_CLOUD_ID"}
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = []
+
+    with patch.dict(os.environ, env, clear=True):
+        with patch("jira_client_impl.jira_impl.requests") as mock_requests:
+            mock_requests.get.return_value = mock_resp
+            with pytest.raises(OSError, match="No accessible Jira resources"):
+                get_oauth_client("my-access-token")
+
+
+def test_get_oauth_client_raises_on_request_failure() -> None:
+    """get_oauth_client raises OSError when the accessible-resources request fails."""
+    env = {k: v for k, v in os.environ.items() if k != "JIRA_CLOUD_ID"}
+
+    with patch.dict(os.environ, env, clear=True):
+        with patch("jira_client_impl.jira_impl.requests") as mock_requests:
+            mock_requests.get.side_effect = Exception("network error")
+            with pytest.raises(OSError, match="Failed to retrieve accessible Jira resources"):
+                get_oauth_client("my-access-token")
