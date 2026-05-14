@@ -34,7 +34,11 @@ from jira_service_adapter.adapter import get_client as get_tracker_client
 # Load environment variables
 load_dotenv(".venv/.env")
 
-app = FastAPI(title="Slack Bot Server", description="Cross-vertical integration bot")
+app = FastAPI(
+    title="Slack Bot Server",
+    description="Cross-vertical integration bot",
+    root_path="/prod",
+    )
 
 # Global integration app (in production, this would be per-user)
 integration_app: IntegrationApp | None = None

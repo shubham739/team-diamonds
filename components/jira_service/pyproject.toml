@@ -13,8 +13,10 @@ dependencies = [
     "httpx>=0.27.0",
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
+    "llm-integration-api",
     "ospd-issue-tracker-api",
     "jira-client-impl",
+    "boto3>=1.34.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +30,7 @@ test = [
 packages = ["src/jira_service"]
 
 [tool.uv.sources]
+llm-integration-api = { git = "https://github.com/tatyanacthomas/llm_integration_api.git", branch = "main" }
 ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", branch = "main" }
 jira-client-impl = {workspace = true}
 

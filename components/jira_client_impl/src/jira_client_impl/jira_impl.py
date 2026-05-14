@@ -647,30 +647,34 @@ def get_client(*, interactive: bool = False) -> JiraClient:
 def get_oauth_client(access_token: str) -> JiraClient:
     """Return a JiraClient configured for OAuth2 Bearer token authentication.
 
-    This is the correct factory to use inside the FastAPI service when the caller
-    has already completed the OAuth2 Authorization Code flow and holds a per-user
-    Atlassian access token.
-
-    The Atlassian REST API for OAuth2 apps uses a different base URL:
-        https://api.atlassian.com/ex/jira/{cloud_id}
-
-    Environment variables:
-        JIRA_CLOUD_ID: The cloud ID from
-            https://api.atlassian.com/oauth/token/accessible-resources
+    The cloud ID is resolved in order:
+    1. JIRA_CLOUD_ID env var (single-org shortcut, avoids an extra API call).
+    2. Atlassian's accessible-resources endpoint, using the token itself.
+       This supports any user from any Atlassian organisation.
 
     Args:
         access_token: A valid Atlassian OAuth2 access token.
 
     Raises:
-        OSError: If JIRA_CLOUD_ID environment variable is not set.
+        OSError: If the cloud ID cannot be determined.
 
     """
     cloud_id = os.environ.get("JIRA_CLOUD_ID", "")
     if not cloud_id:
-        msg = (
-            "Missing required environment variable: JIRA_CLOUD_ID. "
-            "Set it to the cloud ID from https://api.atlassian.com/oauth/token/accessible-resources"
-        )
-        raise OSError(msg)
+        try:
+            resp = requests.get(
+                "https://api.atlassian.com/oauth/token/accessible-resources",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            resources: list[dict[str, str]] = resp.json()
+        except Exception as exc:
+            msg = f"Failed to retrieve accessible Jira resources: {exc}"
+            raise OSError(msg) from exc
+        if not resources:
+            msg = "No accessible Jira resources found for this token."
+            raise OSError(msg)
+        cloud_id = resources[0]["id"]
     base_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"
     return JiraClient(base_url, access_token=access_token)

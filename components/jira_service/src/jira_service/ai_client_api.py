@@ -1,13 +1,32 @@
-"""OpenRouter API client with Jira tool definitions for LLM-powered chat."""
+"""OpenRouter API adapter with Jira tool definitions for LLM-powered chat."""
 
 import os
-from typing import Any, Self
+from typing import Any, Self, cast
 
-import httpx
+import requests
 from fastapi import HTTPException
+from llm_integration_api.interface.exceptions import LLMIntegrationError
+from llm_integration_api.open_router_impl.open_router_client import OpenRouterClient as BaseOpenRouterClient
 
 DEFAULT_MODEL = "anthropic/claude-sonnet-4-6"
-_BASE_URL = "https://openrouter.ai/api/v1"
+_REQUEST_TIMEOUT_SECONDS = 60
+_OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
+JIRA_TOOL_TRIGGER = "@jira"
+
+GENERAL_CHAT_SYSTEM_PROMPT = (
+    "You are a helpful general-purpose assistant. Answer normal questions directly. "
+    "Keep responses relatively short but informative by default, typically 2-5 sentences unless the user asks for more detail. "
+    "When useful, use concise bullet points for clarity. "
+    "Never ask the user questions, including clarifying or follow-up questions. "
+    "Do not end responses with a question mark and do not request additional user input. "
+    "Jira tools are only available when the user explicitly opts in with @jira. "
+    "When @jira is present, help with Jira issues and boards using the provided tools when needed. "
+    "When @jira is absent, do not attempt Jira-specific actions and answer conversationally instead. "
+    "When calling Jira tools, always call them immediately using only the information the user provided. "
+    "All tool parameters except those marked required are optional — omit them if not supplied. "
+    "Never ask for missing optional parameters such as email, assignee, or due date. "
+    "If the user says 'my issues' or 'my tasks' and no email is known, call list_issues with no members filter."
+)
 
 JIRA_TOOLS: list[dict[str, Any]] = [
     {
@@ -107,46 +126,82 @@ JIRA_TOOLS: list[dict[str, Any]] = [
 ]
 
 
+def jira_mode_requested(user_message: str) -> bool:
+    """Return whether the user explicitly requested Jira-aware behavior."""
+    return JIRA_TOOL_TRIGGER in user_message.lower()
+
+
+def normalize_chat_message(user_message: str) -> str:
+    """Remove the Jira trigger token before sending the user message to the model."""
+    return user_message.replace(JIRA_TOOL_TRIGGER, "").strip() or user_message.strip()
+
+
 class OpenRouterError(Exception):
     """Raised on OpenRouter API or network errors."""
 
 
 class OpenRouterClient:
-    """Thin httpx wrapper for OpenRouter /chat/completions with tool use."""
+    """Compatibility adapter using llm-integration-api with tool-call support."""
 
-    def __init__(self, api_key: str, model: str = DEFAULT_MODEL) -> None:
-        """Initialise the client with an API key and optional model override."""
-        self._model = model
-        self._http = httpx.Client(
-            base_url=_BASE_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=20.0,
-        )
+    def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL, site_url: str = "", app_name: str = "") -> None:
+        """Initialise the client with API key/model and optional OpenRouter attribution headers."""
+        resolved_api_key = (api_key or os.environ.get(_OPENROUTER_API_KEY_ENV, "")).strip()
+        if not resolved_api_key:
+            msg = "OpenRouter not configured: set OPENROUTER_API_KEY"
+            raise OpenRouterError(msg)
+
+        # Keep OPENROUTER_API_KEY available for downstream libraries that load credentials from env.
+        os.environ[_OPENROUTER_API_KEY_ENV] = resolved_api_key
+
+        try:
+            self._client = BaseOpenRouterClient(api_key=resolved_api_key, model=model, site_url=site_url, app_name=app_name)
+        except LLMIntegrationError as e:
+            raise OpenRouterError(str(e)) from e
+        self._headers: dict[str, str] = {
+            "Authorization": f"Bearer {self._client.api_key}",
+            "Content-Type": "application/json",
+        }
+        if site_url:
+            self._headers["HTTP-Referer"] = site_url
+        if app_name:
+            self._headers["X-Title"] = app_name
 
     def complete(
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Call /chat/completions and return the parsed JSON response."""
-        payload: dict[str, Any] = {"model": self._model, "messages": messages}
+        """Call OpenRouter /chat/completions and return the raw JSON response."""
+        payload: dict[str, Any] = {"model": self._client.model, "messages": messages}
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
         try:
-            response = self._http.post("/chat/completions", json=payload)
+            response = requests.post(
+                BaseOpenRouterClient.BASE_URL,
+                json=payload,
+                headers=self._headers,
+                timeout=_REQUEST_TIMEOUT_SECONDS,
+            )
             response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            msg = f"OpenRouter API error {e.response.status_code}: {e.response.text}"
+        except requests.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else "unknown"
+            body = e.response.text if e.response is not None else str(e)
+            msg = f"OpenRouter API error {status_code}: {body}"
             raise OpenRouterError(msg) from e
-        except httpx.RequestError as e:
+        except requests.RequestException as e:
             msg = f"OpenRouter request failed: {e}"
             raise OpenRouterError(msg) from e
-        return response.json()  # type: ignore[no-any-return]
+        parsed = response.json()
+        if not isinstance(parsed, dict):
+            msg = "OpenRouter returned an invalid response payload"
+            raise OpenRouterError(msg)
+        return cast("dict[str, Any]", parsed)
 
     def close(self) -> None:
-        """Close the underlying HTTP client."""
-        self._http.close()
+        """Close resources used by the client."""
+        # requests.post is stateless here; no persistent session to close.
+        return
 
     def __enter__(self) -> Self:
         """Return self for use as a context manager."""
@@ -159,8 +214,8 @@ class OpenRouterClient:
 
 def get_openrouter_client() -> OpenRouterClient:
     """FastAPI dependency — reads OPENROUTER_API_KEY and OPENROUTER_MODEL from environment."""
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    api_key = os.environ.get(_OPENROUTER_API_KEY_ENV, "")
     if not api_key:
-        raise HTTPException(status_code=503, detail="OpenRouter not configured: set OPENROUTER_API_KEY")
+        raise HTTPException(status_code=503, detail=f"OpenRouter not configured: set {_OPENROUTER_API_KEY_ENV}")
     model = os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL)
-    return OpenRouterClient(api_key=api_key, model=model)
+    return OpenRouterClient(model=model)

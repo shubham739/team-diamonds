@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Relay — Slack ↔ Jira</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>
+  window.TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "theme": "light",
+    "accent": "#C26E4F",
+    "density": "regular"
+  }/*EDITMODE-END*/;
+</script>
+
+<style>
+  :root {
+    --bg:           oklch(0.985 0.003 90);
+    --bg-elev:      oklch(1    0     0);
+    --bg-sunken:    oklch(0.965 0.004 80);
+    --ink:          oklch(0.22  0.012 60);
+    --ink-2:        oklch(0.42  0.010 60);
+    --ink-3:        oklch(0.58  0.008 60);
+    --ink-4:        oklch(0.74  0.006 60);
+    --line:         oklch(0.92  0.006 80);
+    --accent:       #C26E4F;
+    --accent-soft:  color-mix(in oklab, var(--accent) 14%, transparent);
+
+    --ok:   oklch(0.62 0.13 155);
+    --warn: oklch(0.72 0.14 75);
+    --bad:  oklch(0.60 0.18 25);
+
+    --r-1: 6px;
+    --r-2: 10px;
+    --r-3: 14px;
+
+    --pad-x: clamp(20px, 5vw, 56px);
+    --row-h: 38px;
+
+    --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial;
+    --font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  }
+  html[data-theme="dark"] {
+    --bg:        oklch(0.18 0.008 60);
+    --bg-elev:   oklch(0.22 0.008 60);
+    --bg-sunken: oklch(0.15 0.008 60);
+    --ink:       oklch(0.96 0.004 80);
+    --ink-2:     oklch(0.78 0.006 80);
+    --ink-3:     oklch(0.62 0.008 70);
+    --ink-4:     oklch(0.45 0.008 70);
+    --line:      oklch(0.30 0.010 65);
+  }
+  html[data-density="compact"] { --row-h: 32px; }
+  html[data-density="comfy"]   { --row-h: 46px; }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  body { font-size: 14px; letter-spacing: -0.005em; line-height: 1.5; }
+  ::selection { background: var(--accent-soft); }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; cursor: default; }
+
+  .mono { font-family: var(--font-mono); font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+  .num  { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+  /* ─── Site shell ─── */
+  .nav {
+    display:flex; align-items:center; gap: 18px;
+    padding: 18px var(--pad-x);
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in oklab, var(--bg) 85%, transparent);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand {
+    display:flex; align-items:center; gap:9px;
+  }
+  .brand-mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--ink); position: relative; flex: none;
+  }
+  .brand-mark::before, .brand-mark::after {
+    content: ""; position: absolute; background: var(--bg);
+    border-radius: 1px;
+  }
+  .brand-mark::before { left:5px; top:5px; width:5px; height:12px; }
+  .brand-mark::after  { left:12px; top:5px; width:5px; height:12px; opacity:.55; }
+  .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .brand-tag  { color: var(--ink-3); font-size: 11px; padding: 1px 6px; border:1px solid var(--line); border-radius: 4px; }
+
+  .nav-links { display:flex; gap: 4px; margin-left: 12px; }
+  .nav-links a {
+    padding: 6px 10px; border-radius: 6px; font-size: 13px; color: var(--ink-2);
+  }
+  .nav-links a:hover { background: var(--bg-sunken); color: var(--ink); }
+  .nav-links a.on { color: var(--ink); font-weight: 500; }
+  .nav-spacer { flex: 1; }
+
+  .pill {
+    display:inline-flex; align-items:center; gap:6px;
+    padding: 4px 10px; border:1px solid var(--line); border-radius: 999px;
+    color: var(--ink-2); font-size: 12px;
+  }
+  .pill .dot { width:6px; height:6px; border-radius:50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 22%, transparent); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.55 } }
+
+  .ava {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: white;
+    display:grid; place-items:center; font-size: 11.5px; font-weight: 600;
+  }
+
+  /* ─── Page ─── */
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 56px var(--pad-x) 80px;
+  }
+  .hero { margin-bottom: 56px; }
+  .hero h1 {
+    font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; letter-spacing: -0.03em;
+    margin: 0 0 14px; line-height: 1.05;
+    text-wrap: pretty;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p {
+    font-size: 16px; color: var(--ink-2); max-width: 56ch;
+    margin: 0; text-wrap: pretty;
+  }
+
+  /* ─── Sections ─── */
+  .section { margin: 48px 0; }
+  .section-head {
+    display:flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    margin-bottom: 18px;
+  }
+  .section-head h2 {
+    font-size: 18px; font-weight: 600; letter-spacing: -0.015em;
+    margin: 0;
+  }
+  .section-head .meta { font-size: 12.5px; color: var(--ink-3); }
+  .section-head .actions { display:flex; gap: 8px; }
+  .section-sub {
+    font-size: 13.5px; color: var(--ink-3); margin: -10px 0 18px; max-width: 60ch;
+  }
+
+  /* ─── Card ─── */
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--r-3);
+  }
+  .card.flat { background: transparent; }
+
+  /* ─── Buttons ─── */
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: var(--bg-elev);
+    color: var(--ink); padding: 0 14px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    height: 34px; display: inline-flex; align-items: center; gap: 7px;
+    transition: background 0.12s ease;
+  }
+  .btn:hover { background: var(--bg-sunken); }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in oklab, var(--ink) 86%, var(--bg)); }
+  .btn.danger { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 25%, var(--line)); }
+  .btn.danger:hover { background: color-mix(in oklab, var(--bad) 8%, var(--bg-elev)); }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+  .btn.ghost { border-color: transparent; color: var(--ink-2); }
+  .btn.ghost:hover { background: var(--bg-sunken); color: var(--ink); }
+
+  /* ─── Connected services ─── */
+  .svcs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .svcs { grid-template-columns: 1fr; } }
+
+  .svc {
+    padding: 22px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 18px;
+    align-items: center;
+  }
+  .lm {
+    width: 44px; height: 44px; border-radius: 11px;
+    display: grid; place-items: center;
+    font-weight: 600; font-size: 16px; letter-spacing: -0.01em;
+    flex: none;
+  }
+  .lm-slack { background: oklch(0.95 0.04 320); color: oklch(0.40 0.16 320); }
+  .lm-jira  { background: oklch(0.95 0.04 240); color: oklch(0.42 0.18 250); }
+  .lm-or    { background: oklch(0.95 0.03 250); color: oklch(0.40 0.14 260); }
+  html[data-theme="dark"] .lm-slack { background: oklch(0.30 0.08 320); color: oklch(0.85 0.10 320); }
+  html[data-theme="dark"] .lm-jira  { background: oklch(0.30 0.08 240); color: oklch(0.85 0.12 250); }
+  html[data-theme="dark"] .lm-or    { background: oklch(0.30 0.06 250); color: oklch(0.85 0.10 260); }
+
+  .svc .ttl { font-size: 15px; font-weight: 500; line-height: 1.2; }
+  .svc .sub { font-size: 12.5px; color: var(--ink-3); margin-top: 4px; }
+  .svc .meta-row {
+    display:flex; gap: 14px; margin-top: 10px;
+    font-size: 12px; color: var(--ink-3);
+  }
+  .svc .meta-row b { color: var(--ink-2); font-weight: 500; }
+
+  .svc .status {
+    display:inline-flex; align-items:center; gap: 6px;
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    background: color-mix(in oklab, var(--ok) 12%, transparent);
+    color: color-mix(in oklab, var(--ok) 60%, var(--ink));
+    font-weight: 500;
+  }
+  .svc .status .d { width:6px; height:6px; border-radius:50%; background: var(--ok); }
+  .svc .status.off {
+    background: var(--bg-sunken);
+    color: var(--ink-3);
+  }
+  .svc .status.off .d { background: var(--ink-4); animation: none; }
+  .svc .right { display:flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+
+  /* ─── Recent commands ─── */
+  .rc-h, .rc-r {
+    display: grid;
+    grid-template-columns: 76px 150px 1fr 130px 78px;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+  }
+  .rc-h { color: var(--ink-3); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--line); }
+  .rc-r { border-top: 1px solid var(--line); font-size: 13px; min-height: var(--row-h); }
+  .rc-r:first-of-type { border-top: 0; }
+  .rc-r:hover { background: var(--bg-sunken); }
+  .rc-r .when { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+  .rc-r .who { display:flex; align-items:center; gap: 8px; min-width: 0; }
+  .rc-r .who-ava { width: 20px; height: 20px; border-radius: 50%; flex: none; display:grid; place-items: center; color: white; font-size: 9.5px; font-weight: 600; }
+  .rc-r .who-name { font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc-r .who-ch { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc-r .cmd { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc-r .res { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc-r .res .iss { color: var(--accent); }
+  .rc-st {
+    display:inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    font-family: var(--font-mono); letter-spacing: 0.01em;
+  }
+  .rc-st .d { width: 5px; height: 5px; border-radius: 50%; }
+  .rc-st.ok    { background: color-mix(in oklab, var(--ok) 12%, transparent);   color: color-mix(in oklab, var(--ok) 60%, var(--ink)); }
+  .rc-st.ok    .d { background: var(--ok); }
+  .rc-st.run   { background: color-mix(in oklab, var(--accent) 14%, transparent); color: color-mix(in oklab, var(--accent) 60%, var(--ink)); }
+  .rc-st.run   .d { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  .rc-st.fail  { background: color-mix(in oklab, var(--bad) 12%, transparent);  color: color-mix(in oklab, var(--bad) 60%, var(--ink)); }
+  .rc-st.fail  .d { background: var(--bad); }
+
+  /* ─── Sessions ─── */
+  .sess-h, .sess-r {
+    display: grid;
+    grid-template-columns: 28px 1fr 180px 130px 100px 110px;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+  }
+  .sess-h { color: var(--ink-3); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--line); }
+  .sess-r { border-top: 1px solid var(--line); font-size: 13px; min-height: var(--row-h); }
+  .sess-r:first-of-type { border-top: 0; }
+  .sess-r:hover { background: var(--bg-sunken); }
+  .sess-ava {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 10px; font-weight: 600; color: white;
+  }
+  .sess-name { font-weight: 500; font-size: 13px; }
+  .sess-handle { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .sess-r .ch { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+  .sess-r .since { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+  .sess-r .calls { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+  .sess-r .term { display: flex; justify-content: flex-end; }
+  .sess-empty { padding: 28px 20px; color: var(--ink-3); font-size: 13px; text-align: center; }
+
+  /* ─── Usage ─── */
+  .usage-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  @media (max-width: 860px) { .usage-grid { grid-template-columns: 1fr; } }
+
+  .usage-stat-row {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--line);
+  }
+  .usage-stat {
+    padding: 16px 20px;
+    border-right: 1px solid var(--line);
+  }
+  .usage-stat:last-child { border-right: 0; }
+  .usage-stat .k { font-size: 11.5px; color: var(--ink-3); margin-bottom: 6px; letter-spacing: 0.02em; }
+  .usage-stat .v { font-size: 22px; font-weight: 600; letter-spacing: -0.025em; line-height: 1; }
+  .usage-stat .v .u { color: var(--ink-3); font-weight: 500; font-size: 13px; margin-left: 4px; }
+  .usage-stat .d { margin-top: 6px; font-size: 11.5px; color: var(--ink-3); }
+
+  .usage-head { padding: 18px 20px 8px; }
+  .usage-head .t { font-size: 14px; font-weight: 500; }
+  .usage-head .s { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+  .usage-head .pill { float: right; margin-top: -2px; }
+
+  .chart {
+    display: grid;
+    grid-template-columns: repeat(30, 1fr);
+    align-items: end;
+    height: 140px;
+    gap: 3px;
+    padding: 0 20px 4px;
+  }
+  .bar { display:block; width: 100%; border-radius: 2px 2px 0 0; background: var(--accent-soft); position: relative; }
+  .bar .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); border-radius: 2px 2px 0 0; }
+  .x-ax {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    font-size: 10.5px; color: var(--ink-3);
+    padding: 8px 20px 16px; border-top: 1px solid var(--line); margin-top: 2px;
+  }
+
+  /* token spend / model breakdown */
+  .tok {
+    padding: 18px 20px 6px;
+  }
+  .tok-h { font-size: 14px; font-weight: 500; margin: 0 0 14px; display:flex; justify-content:space-between; align-items: baseline; }
+  .tok-h .s { color: var(--ink-3); font-size: 12px; font-weight: 400; }
+  .tok-bar-stack {
+    display: flex; height: 8px; border-radius: 4px; overflow: hidden;
+    background: var(--bg-sunken); margin-bottom: 14px;
+  }
+  .tok-bar-stack i { display: block; height: 100%; }
+  .tok-list { display: flex; flex-direction: column; gap: 9px; padding-bottom: 14px; }
+  .tok-row { display: grid; grid-template-columns: 8px 1fr auto auto; gap: 10px; align-items: center; font-size: 12.5px; }
+  .tok-row .sw { width: 8px; height: 8px; border-radius: 2px; }
+  .tok-row .nm { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+  .tok-row .pv { color: var(--ink-3); font-size: 11px; margin-left: 6px; }
+  .tok-row .v { color: var(--ink-2); font-family: var(--font-mono); font-size: 12px; }
+  .tok-row .pct { color: var(--ink-3); font-family: var(--font-mono); font-size: 11.5px; min-width: 38px; text-align: right; }
+
+  /* footer */
+  .foot {
+    margin-top: 80px; padding-top: 22px;
+    border-top: 1px solid var(--line);
+    display:flex; align-items:center; justify-content: space-between; gap: 14px;
+    color: var(--ink-3); font-size: 12px;
+  }
+  .foot .links { display:flex; gap: 16px; }
+  .foot a:hover { color: var(--ink); }
+
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9 3.5h3.5V7M12.5 3.5L7 9M11.5 9.5v3h-8v-8h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+    <symbol id="i-arr" viewBox="0 0 16 16"><path d="M4 8h8M9 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M3.5 8a4.5 4.5 0 018-2.8M12.5 8a4.5 4.5 0 01-8 2.8M11.5 2.5v3h-3M4.5 13.5v-3h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+
+// ─── Data ─────────────────────────────────────────────────────────────────
+// 10 most recent commands, newest first
+const RECENT = [
+  { when: "just now",   user: "Aria Chen",    handle: "@aria",    ch: "#eng-bugs",   hue:  30, cmd: 'create issue "fix login redirect on safari"',          status: "running", result: "" },
+  { when: "12s ago",    user: "Dani Okafor",  handle: "@dani",    ch: "#sprint-23",  hue: 200, cmd: "move PROJ-1284 to in-progress and assign to dani",       status: "ok",      result: "PROJ-1284 → In Progress" },
+  { when: "38s ago",    user: "Priya Shah",   handle: "@priya",   ch: "@priya (DM)", hue: 320, cmd: "list my open tickets due this week",                     status: "ok",      result: "7 issues returned" },
+  { when: "1m ago",     user: "Marcus Liu",   handle: "@marcus",  ch: "#oncall",     hue: 140, cmd: "summarize all P0 incidents from last 7 days",            status: "ok",      result: "4 incidents summarized" },
+  { when: "2m ago",     user: "Theo Vasquez", handle: "@theo",    ch: "#design",     hue: 270, cmd: "add comment + attach figma to DESIGN-441",               status: "ok",      result: "DESIGN-441 commented" },
+  { when: "4m ago",     user: "Marcus Liu",   handle: "@marcus",  ch: "@marcus (DM)",hue: 140, cmd: "close stale tickets in BACKEND untouched 60d+",          status: "fail",    result: "permission denied" },
+  { when: "6m ago",     user: "Aria Chen",    handle: "@aria",    ch: "#eng-bugs",   hue:  30, cmd: "reassign ENG-2210 to priya and set priority to high",     status: "ok",      result: "ENG-2210 updated" },
+  { when: "9m ago",     user: "Sam Patel",    handle: "@sam",     ch: "#qa",         hue:  90, cmd: "link QA-87 as blocks of ENG-2189",                       status: "ok",      result: "link added" },
+  { when: "11m ago",    user: "Lena Park",    handle: "@lena",    ch: "#growth",     hue: 220, cmd: 'find all issues mentioning "checkout drop-off"',         status: "ok",      result: "12 issues returned" },
+  { when: "14m ago",    user: "Dani Okafor",  handle: "@dani",    ch: "#sprint-23",  hue: 200, cmd: "create epic \u201cQ3 mobile rewrite\u201d in ENG",       status: "ok",      result: "ENG-2240 created" },
+];
+
+const SESSIONS_INIT = [
+  { id: "s1", name: "Aria Chen",     handle: "@aria",      ch: "#eng-bugs",     since: "8m ago",  calls: 12, hue: 30  },
+  { id: "s2", name: "Dani Okafor",   handle: "@dani",      ch: "#sprint-23",    since: "21m ago", calls: 7,  hue: 200 },
+  { id: "s3", name: "Marcus Liu",    handle: "@marcus",    ch: "#oncall",       since: "44m ago", calls: 19, hue: 140 },
+  { id: "s4", name: "Priya Shah",    handle: "@priya",     ch: "@priya (DM)",   since: "1h ago",  calls: 3,  hue: 320 },
+  { id: "s5", name: "Theo Vasquez",  handle: "@theo",      ch: "#design",       since: "2h ago",  calls: 5,  hue: 270 },
+];
+
+// 30 days of OpenRouter token spend
+const TOKENS = Array.from({ length: 30 }, (_, i) => {
+  const seed = (n) => Math.sin((i + n) * 1.7) * 0.5 + 0.5;
+  return Math.round(60 + seed(2) * 220 + (i > 22 ? 80 : 0));
+});
+const TOKENS_MAX = Math.max(...TOKENS);
+const TOKENS_TOTAL = TOKENS.reduce((a, b) => a + b, 0); // arbitrary unit
+
+const MODEL_SPEND = [
+  { name: "claude-sonnet-4.5", vendor: "Anthropic", pct: 52, tokens: "8.42M",  cost: "$184.20", color: "oklch(0.62 0.13 35)" },
+  { name: "gpt-5-mini",        vendor: "OpenAI",    pct: 24, tokens: "3.91M",  cost: "$42.10",  color: "oklch(0.62 0.13 155)" },
+  { name: "llama-3.3-70b",     vendor: "Meta",      pct: 14, tokens: "2.34M",  cost: "$11.84",  color: "oklch(0.62 0.13 250)" },
+  { name: "gemini-2.5-flash",  vendor: "Google",    pct:  7, tokens: "1.10M",  cost: "$6.42",   color: "oklch(0.62 0.13 75)"  },
+  { name: "deepseek-v3",       vendor: "DeepSeek",  pct:  3, tokens: "490K",   cost: "$0.94",   color: "oklch(0.62 0.13 320)" },
+];
+
+// ─── Tiny components ──────────────────────────────────────────────────────
+const Icon = ({ id, w = 14, style }) => (
+  <svg width={w} height={w} style={style} aria-hidden="true"><use href={`#${id}`} /></svg>
+);
+
+const Nav = () => (
+  <header className="nav">
+    <div className="brand">
+      <div className="brand-mark" aria-hidden="true" />
+      <div className="brand-name">Relay</div>
+      <span className="brand-tag mono">v0.4</span>
+    </div>
+    <div className="nav-links">
+      <a className="on">Dashboard</a>
+      <a>Rules</a>
+      <a>Logs</a>
+      <a>Settings</a>
+    </div>
+    <div className="nav-spacer" />
+    <div className="ava">A</div>
+  </header>
+);
+
+// ─── Hero ─────────────────────────────────────────────────────────────────
+const Hero = () => (
+  <div className="hero">
+    <h1>Send commands to <em>Jira</em><br/>from your <em>Slack</em> workspace.</h1>
+    <p>Authenticate your Slack and Jira accounts once. Relay listens for natural-language requests in your channels and executes them through the right model — no plugins, no configuration files.</p>
+  </div>
+);
+
+// ─── Connected services ───────────────────────────────────────────────────
+const Service = ({ lm, title, sub, meta, connected, onToggle }) => (
+  <div className="card svc">
+    <div className={`lm ${lm.cls}`}>{lm.label}</div>
+    <div style={{ minWidth: 0 }}>
+      <div className="ttl">{title}</div>
+      <div className="sub">{sub}</div>
+      <div className="meta-row">
+        {meta.map((m, i) => (
+          <span key={i}><span style={{ color: "var(--ink-4)" }}>{m.k}</span> <b>{m.v}</b></span>
+        ))}
+      </div>
+    </div>
+    <div className="right">
+      <span className={`status${connected ? "" : " off"}`}>
+        <span className="d" />{connected ? "Authenticated" : "Not connected"}
+      </span>
+      {connected ? (
+        <button className="btn sm" onClick={onToggle}>Disconnect</button>
+      ) : (
+        <button className="btn primary sm" onClick={onToggle}>
+          Authenticate <Icon id="i-arr" w={12} />
+        </button>
+      )}
+    </div>
+  </div>
+);
+
+const ConnectedServices = () => {
+  const [slack, setSlack] = useState(true);
+  const [jira,  setJira]  = useState(true);
+  return (
+    <section className="section" id="connected">
+      <div className="section-head">
+        <h2>Connected services</h2>
+        <span className="meta">Authenticate once · uses your browser session</span>
+      </div>
+      <p className="section-sub">Relay reads from Slack and writes to Jira on your behalf. Tokens are stored in your browser session — no shared service accounts.</p>
+      <div className="svcs">
+        <Service
+          lm={{ cls: "lm-slack", label: "S" }}
+          title="Slack"
+          sub="Source — listens for natural-language commands"
+          meta={[
+            { k: "Workspace", v: "northwind" },
+            { k: "Channels",  v: "14 listening" },
+            { k: "Trigger",   v: "/relay" },
+          ]}
+          connected={slack}
+          onToggle={() => setSlack(!slack)}
+        />
+        <Service
+          lm={{ cls: "lm-jira", label: "J" }}
+          title="Jira Cloud"
+          sub="Target — executes the resolved action"
+          meta={[
+            { k: "Site",     v: "northwind.atlassian.net" },
+            { k: "Projects", v: "ENG, DESIGN, OPS +3" },
+            { k: "Scope",    v: "issue:write" },
+          ]}
+          connected={jira}
+          onToggle={() => setJira(!jira)}
+        />
+      </div>
+    </section>
+  );
+};
+
+// ─── Recent commands ──────────────────────────────────────────────────────
+const initials = (name) => name.split(" ").map(p => p[0]).join("").slice(0, 2);
+
+const StatusPill = ({ status }) => {
+  const map = {
+    ok:      { cls: "ok",   label: "success" },
+    running: { cls: "run",  label: "running" },
+    fail:    { cls: "fail", label: "failed"  },
+  };
+  const s = map[status] || map.ok;
+  return <span className={`rc-st ${s.cls}`}><span className="d" />{s.label}</span>;
+};
+
+const RecentCommands = () => (
+  <section className="section" id="recent">
+    <div className="section-head">
+      <h2>Recent commands</h2>
+      <span className="meta">Last 10 inputs · live feed</span>
+    </div>
+    <p className="section-sub">Every Slack message routed through Relay, in chronological order. Click any row to inspect the model trace and Jira response.</p>
+    <div className="card">
+      <div className="rc-h">
+        <span>When</span>
+        <span>From</span>
+        <span>Command</span>
+        <span>Result</span>
+        <span style={{ textAlign: "right" }}>Status</span>
+      </div>
+      {RECENT.map((r, i) => (
+        <div key={i} className="rc-r">
+          <span className="when">{r.when}</span>
+          <div className="who">
+            <span className="who-ava" style={{ background: `oklch(0.55 0.13 ${r.hue})` }}>{initials(r.user)}</span>
+            <div style={{ minWidth: 0 }}>
+              <div className="who-name">{r.user}</div>
+              <div className="who-ch">{r.ch}</div>
+            </div>
+          </div>
+          <span className="cmd">{r.cmd}</span>
+          <span className="res">
+            {r.status === "running"
+              ? <span style={{ color: "var(--ink-3)" }}>—</span>
+              : r.status === "fail"
+                ? <span style={{ color: "var(--bad)" }}>{r.result}</span>
+                : <span><span className="iss">{r.result.split(" ")[0]}</span>{r.result.slice(r.result.split(" ")[0].length)}</span>}
+          </span>
+          <span style={{ display:"flex", justifyContent:"flex-end" }}><StatusPill status={r.status} /></span>
+        </div>
+      ))}
+    </div>
+  </section>
+);
+
+// ─── Sessions ─────────────────────────────────────────────────────────────
+const Sessions = () => {
+  const [sessions, setSessions] = useState(SESSIONS_INIT);
+
+  const terminate = (id) => setSessions(s => s.filter(x => x.id !== id));
+  const terminateAll = () => setSessions([]);
+
+  return (
+    <section className="section" id="sessions">
+      <div className="section-head">
+        <h2>Current online sessions</h2>
+        <div className="actions">
+          <button className="btn sm ghost" onClick={() => setSessions(SESSIONS_INIT)}>
+            <Icon id="i-refresh" w={12} /> Refresh
+          </button>
+          {sessions.length > 0 && (
+            <button className="btn sm danger" onClick={terminateAll}>Terminate all</button>
+          )}
+        </div>
+      </div>
+      <p className="section-sub">Active Slack chat sessions currently bound to your Relay instance. Terminating a session ends it on Slack and revokes its in-flight LLM calls.</p>
+
+      <div className="card">
+        <div className="sess-h">
+          <span></span>
+          <span>User</span>
+          <span>Channel / DM</span>
+          <span>Started</span>
+          <span>Calls</span>
+          <span style={{ textAlign: "right" }}>Action</span>
+        </div>
+        {sessions.length === 0 ? (
+          <div className="sess-empty">No active sessions. New ones will appear here as soon as someone messages Relay.</div>
+        ) : sessions.map(s => (
+          <div key={s.id} className="sess-r">
+            <div className="sess-ava" style={{ background: `oklch(0.55 0.13 ${s.hue})` }}>
+              {s.name.split(" ").map(p => p[0]).join("")}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div className="sess-name">{s.name}</div>
+              <div className="sess-handle mono">{s.handle}</div>
+            </div>
+            <span className="ch">{s.ch}</span>
+            <span className="since">{s.since}</span>
+            <span className="calls">{s.calls}</span>
+            <div className="term">
+              <button className="btn sm danger" onClick={() => terminate(s.id)}>
+                <Icon id="i-x" w={11} /> Terminate
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+// ─── Usage (OpenRouter tokens) ────────────────────────────────────────────
+const Usage = () => {
+  return (
+    <section className="section" id="usage">
+      <div className="section-head">
+        <h2>OpenRouter usage</h2>
+        <span className="meta">Billing month · May 2026</span>
+      </div>
+      <p className="section-sub">Your token consumption across all models OpenRouter has routed for this workspace. Cost shown is what OpenRouter has billed to your key.</p>
+
+      <div className="usage-grid">
+        {/* Token chart */}
+        <div className="card">
+          <div className="usage-head">
+            <span className="pill"><span className="dot" /> Live</span>
+            <div className="t">Tokens routed · last 30 days</div>
+            <div className="s">Stacked input + output, all models</div>
+          </div>
+          <div className="chart">
+            {TOKENS.map((v, i) => (
+              <div key={i} className="bar" style={{ height: "100%" }}>
+                <span className="fill" style={{ height: `${(v / TOKENS_MAX) * 100}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="x-ax">
+            <span>Apr 9</span><span>Apr 16</span><span>Apr 23</span><span>Apr 30</span><span>May 8</span>
+          </div>
+          <div className="usage-stat-row">
+            <div className="usage-stat">
+              <div className="k">Total tokens</div>
+              <div className="v num">16.2<span className="u">M</span></div>
+              <div className="d">+18% vs last month</div>
+            </div>
+            <div className="usage-stat">
+              <div className="k">Spend (MTD)</div>
+              <div className="v num">$245.50</div>
+              <div className="d">$500 cap · 49% used</div>
+            </div>
+            <div className="usage-stat">
+              <div className="k">Avg / command</div>
+              <div className="v num">1,034<span className="u">tok</span></div>
+              <div className="d">−6% vs last month</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Model spend */}
+        <div className="card">
+          <div className="tok">
+            <div className="tok-h">
+              <span>Spend by model</span>
+              <span className="s">last 30 days</span>
+            </div>
+            <div className="tok-bar-stack">
+              {MODEL_SPEND.map(m => (
+                <i key={m.name} style={{ width: `${m.pct}%`, background: m.color }} />
+              ))}
+            </div>
+            <div className="tok-list">
+              {MODEL_SPEND.map(m => (
+                <div key={m.name} className="tok-row">
+                  <span className="sw" style={{ background: m.color }} />
+                  <div style={{ minWidth: 0 }}>
+                    <span className="nm">{m.name}</span>
+                    <span className="pv">· {m.tokens} tok</span>
+                  </div>
+                  <span className="v">{m.cost}</span>
+                  <span className="pct">{m.pct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ─── Footer ───────────────────────────────────────────────────────────────
+const Footer = () => (
+  <div className="foot">
+    <div>© 2026 Relay · Built on OpenRouter</div>
+    <div className="links">
+      <a>Docs</a>
+      <a>Privacy</a>
+      <a>Status</a>
+      <a>Contact</a>
+    </div>
+  </div>
+);
+
+// ─── App ──────────────────────────────────────────────────────────────────
+function App() {
+  const [t, setTweak] = useTweaks(window.TWEAK_DEFAULTS);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    html.dataset.theme   = t.theme;
+    html.dataset.density = t.density;
+    html.style.setProperty("--accent", t.accent);
+  }, [t.theme, t.density, t.accent]);
+
+  return (
+    <>
+      <Nav />
+      <main className="page">
+        <Hero />
+        <ConnectedServices />
+        <RecentCommands />
+        <Sessions />
+        <Usage />
+        <Footer />
+      </main>
+
+      <TweaksPanel>
+        <TweakSection label="Appearance" />
+        <TweakRadio
+          label="Theme"
+          value={t.theme}
+          options={["light", "dark"]}
+          onChange={v => setTweak("theme", v)}
+        />
+        <TweakColor
+          label="Accent"
+          value={t.accent}
+          options={["#C26E4F", "#5B6BD9", "#3F8F6E", "#A95FB6"]}
+          onChange={v => setTweak("accent", v)}
+        />
+        <TweakRadio
+          label="Density"
+          value={t.density}
+          options={["compact", "regular", "comfy"]}
+          onChange={v => setTweak("density", v)}
+        />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
